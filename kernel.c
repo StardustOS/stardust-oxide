@@ -17,16 +17,20 @@
 
 #include "include/os.h"
 
-int main() 
+int main()
 {
 	printk("Hello world!\n\r");
+
+	hello();
+	panic_if_5(5);
+
 	return 0;
 }
 
-void start_kernel(start_info_t * start_info)
+void start_kernel(start_info_t *start_info)
 {
 	HYPERVISOR_set_callbacks((unsigned long)hypervisor_callback, (unsigned long)failsafe_callback, 0);
-	HYPERVISOR_update_va_mapping((unsigned long) shared_info, __pte(start_info->shared_info), UVMF_INVLPG);
+	HYPERVISOR_update_va_mapping((unsigned long)shared_info, __pte(start_info->shared_info), UVMF_INVLPG);
 
 	console_init(start_info);
 
@@ -43,9 +47,8 @@ void start_kernel(start_info_t * start_info)
 
 	console_flush();
 
-	while(1)
+	while (1)
 	{
 		/* Infinite loop to keep the kernel running */
 	}
 }
-

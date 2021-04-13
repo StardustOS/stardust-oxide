@@ -20,6 +20,7 @@
 
 #include "console.h"
 #include "mm.h"
+#include "libminimal.h"
 
 #include <xen/features.h>
 

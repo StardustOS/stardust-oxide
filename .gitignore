@@ -1,0 +1,4 @@
+*.o
+minimal
+minimal.gz
+/target
