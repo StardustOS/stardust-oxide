@@ -6,3 +6,4 @@ edition = "2018"
 [dependencies]
 cty = "0.2"
 xen-sys = { path = "../xen-sys" }
+spin = "0.9"

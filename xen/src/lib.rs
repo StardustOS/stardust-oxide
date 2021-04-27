@@ -6,6 +6,6 @@
 
 pub use xen_sys;
 
-//pub mod console;
+pub mod console;
 pub mod platform;
 pub mod sched;

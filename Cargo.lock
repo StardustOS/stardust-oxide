@@ -275,7 +275,6 @@ dependencies = [
 name = "stardust"
 version = "0.1.0"
 dependencies = [
- "spin",
  "xen",
 ]
 
@@ -372,6 +371,7 @@ name = "xen"
 version = "0.1.0"
 dependencies = [
  "cty",
+ "spin",
  "xen-sys",
 ]
 

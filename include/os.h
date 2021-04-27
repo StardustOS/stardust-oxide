@@ -18,10 +18,10 @@
 #ifndef _OS_H_
 #define _OS_H_
 
-#include "console.h"
 #include "mm.h"
 #include "libstardust.h"
-
+#include <stdint.h>
+#include <xen/sched.h>
 #include <xen/features.h>
 
 #if defined(__x86_64__)

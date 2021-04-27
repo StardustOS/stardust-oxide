@@ -9,4 +9,3 @@ crate-type = ["staticlib"]
 
 [dependencies]
 xen = { path = "../xen" }
-spin = "0.9"

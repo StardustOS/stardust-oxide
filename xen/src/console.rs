@@ -1,36 +1,62 @@
 //! Console utilities
 
-extern "C" {
-    static mut console: *mut xencons_interface;
-    static mut console_evt: evtchn_port_t;
-}
-
 use {
+    crate::{
+        platform::x86_64::hypercall::hypercall2,
+        xen_sys::{
+            evtchn_port_t, evtchn_send, text_start, xencons_interface, EVTCHNOP_send,
+            SCHEDOP_yield, __HYPERVISOR_event_channel_op, __HYPERVISOR_sched_op, start_info_t,
+            __HYPERVISOR_VIRT_START,
+        },
+    },
     core::{
         fmt,
         sync::atomic::{fence, Ordering},
     },
     spin::Mutex,
-    xen::{
-        platform::x86_64::hypercall::hypercall2,
-        xen_sys::{
-            evtchn_port_t, evtchn_send, xencons_interface, EVTCHNOP_send, SCHEDOP_yield,
-            __HYPERVISOR_event_channel_op, __HYPERVISOR_sched_op,
-        },
-    },
 };
 
-static WRITER: Mutex<Option<Writer>> = Mutex::new(Some(Writer));
+/// Global Xen console writer
+static WRITER: Mutex<Option<Writer>> = Mutex::new(None);
 
 /// Xen console writer
-struct Writer;
+pub struct Writer<'a> {
+    console: &'a mut xencons_interface,
+    console_evt: evtchn_port_t,
+}
 
-impl Writer {
+impl<'a> Writer<'a> {
+    /// Initialize the global Xen console writer
+    pub fn init(start: &start_info_t) {
+        // this might be unnecessary, re-initializing shouldn't break anything
+        // but it also shouldn't ever need to be done
+        if WRITER.lock().is_some() {
+            panic!("WRITER already initialized");
+        }
+
+        // SAFETY: sound as long as `start` is a valid reference and the OS is
+        // running in an unprivileged (non-Dom0) domain
+        let dom_u = unsafe { start.console.domU };
+
+        let page_num = dom_u.mfn as isize;
+
+        let hypervisor_virt_start = __HYPERVISOR_VIRT_START as *mut usize;
+
+        // SAFETY:
+        let console = unsafe {
+            &mut *(((*hypervisor_virt_start.offset(page_num) << 12) + text_start() as usize)
+                as *mut xencons_interface)
+        };
+
+        *WRITER.lock() = Some(Writer {
+            console,
+            console_evt: dom_u.evtchn,
+        });
+    }
+
     fn write_byte(&mut self, event: &evtchn_send, byte: u8) {
         loop {
-            let prod = unsafe { (*console).out_prod };
-            let cons = unsafe { (*console).out_cons };
-            let data = prod.wrapping_sub(cons);
+            let data = self.console.out_prod.wrapping_sub(self.console.out_cons);
 
             unsafe {
                 hypercall2(
@@ -47,19 +73,19 @@ impl Writer {
             }
         }
 
-        let out_prod = unsafe { (*console).out_prod };
+        let out_prod = self.console.out_prod;
         let ring_index = (out_prod & (2047)) as usize;
 
-        unsafe { (*console).out[ring_index] = byte as i8 };
+        self.console.out[ring_index] = byte as i8;
 
         fence(Ordering::SeqCst);
 
-        unsafe { (*console).out_prod += 1 };
+        self.console.out_prod += 1;
     }
 
     fn write_bytes<I: Iterator<Item = u8>>(&mut self, bytes: I) {
         let event = evtchn_send {
-            port: unsafe { console_evt },
+            port: self.console_evt,
         };
 
         for byte in bytes {
@@ -81,7 +107,7 @@ impl Writer {
 
     fn flush(&self) {
         unsafe {
-            while (*console).out_cons < (*console).out_prod {
+            while (self.console).out_cons < (self.console).out_prod {
                 hypercall2(__HYPERVISOR_sched_op, u64::from(SCHEDOP_yield), 0);
                 fence(Ordering::SeqCst);
             }
@@ -89,7 +115,7 @@ impl Writer {
     }
 }
 
-impl fmt::Write for Writer {
+impl<'a> fmt::Write for Writer<'a> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let bytes = s.bytes();
 

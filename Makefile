@@ -30,7 +30,7 @@ ASFLAGS  = -D__ASSEMBLY__ $(ARCH_ASFLAGS)
 
 .PHONY: all clean run target/target/debug/libstardust.a
 
-all: $(ARCH_OBJS) kernel.o console.o traps.o target/target/debug/libstardust.a
+all: $(ARCH_OBJS) traps.o target/target/debug/libstardust.a
 	$(LD) $(LDFLAGS) $^ -o minimal
 	gzip -f -9 -c minimal >minimal.gz
 
