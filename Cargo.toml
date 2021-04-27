@@ -1,9 +1,7 @@
-[package]
-name = "minimal"
-version = "0.1.0"
-authors = ["Ferdia McKeogh <ferdia@mckeogh.tech>"]
-edition = "2018"
+[workspace]
 
-[lib]
-name = "minimal"
-crate-type = ["staticlib"]
+members = [
+    "stardust",
+    "xen",
+    "xen-sys"
+]

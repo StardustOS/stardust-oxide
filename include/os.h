@@ -20,14 +20,23 @@
 
 #include "console.h"
 #include "mm.h"
-#include "libminimal.h"
+#include "libstardust.h"
 
 #include <xen/features.h>
 
 #if defined(__x86_64__)
-#define mb()  __asm__ __volatile__ ( "mfence" : : : "memory")
-#define rmb() __asm__ __volatile__ ( "lfence" : : : "memory")
-#define wmb() __asm__ __volatile__ ( "" : : : "memory")
+#define mb() __asm__ __volatile__("mfence" \
+                                  :        \
+                                  :        \
+                                  : "memory")
+#define rmb() __asm__ __volatile__("lfence" \
+                                   :        \
+                                   :        \
+                                   : "memory")
+#define wmb() __asm__ __volatile__("" \
+                                   :  \
+                                   :  \
+                                   : "memory")
 #endif
 
 void hypervisor_callback(void);
@@ -36,6 +45,6 @@ void failsafe_callback(void);
 uint8_t xen_features[XENFEAT_NR_SUBMAPS * 32];
 char stack[8192];
 
-extern shared_info_t * shared_info;
+extern shared_info_t *shared_info;
 
 #endif /* _OS_H_ */

@@ -28,15 +28,15 @@ LDFLAGS  += -nostdlib -g $(ARCH_LDFLAGS)
 CFLAGS   += -Wall -g $(ARCH_CFLAGS) -fno-stack-protector
 ASFLAGS  = -D__ASSEMBLY__ $(ARCH_ASFLAGS)
 
-.PHONY: all clean run
+.PHONY: all clean run target/target/debug/libstardust.a
 
-all: $(ARCH_OBJS) kernel.o console.o traps.o target/target/debug/libminimal.a
+all: $(ARCH_OBJS) kernel.o console.o traps.o target/target/debug/libstardust.a
 	$(LD) $(LDFLAGS) $^ -o minimal
 	gzip -f -9 -c minimal >minimal.gz
 
-target/target/debug/libminimal.a: src/lib.rs Cargo.toml
+target/target/debug/libstardust.a:
 	cargo build
-	cbindgen --config cbindgen.toml --crate minimal --output include/libminimal.h
+	cbindgen --config cbindgen.toml --crate stardust --output include/libstardust.h
 
 clean:
 	rm -f *.o

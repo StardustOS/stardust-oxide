@@ -14,7 +14,7 @@
 #define ENTRY(X) .globl X ; X :
 .globl _start, shared_info, hypercall_page
 
-#define __STACK_SIZE 8192
+#define __STACK_SIZE 65536
 _start:
         cld
         movq stack_start(%rip),%rsp
@@ -35,14 +35,14 @@ hypercall_page:
         .org 0x3000
 
 
-/* Offsets into shared_info_t. */                
+/* Offsets into shared_info_t. */
 #define evtchn_upcall_pending		/* 0 */
 #define evtchn_upcall_mask		1
 
 NMI_MASK = 0x80000000
 
 #define RDI 112
-#define ORIG_RAX 120       /* + error_code */ 
+#define ORIG_RAX 120       /* + error_code */
 #define EFLAGS 144
 
 .macro RESTORE_ALL
@@ -56,7 +56,7 @@ NMI_MASK = 0x80000000
 	movq 7*8(%rsp),%rsi
 	movq 8*8(%rsp),%rdi
 	addq $9*8+8,%rsp
-.endm	
+.endm
 
 
 .macro HYPERVISOR_IRET flag
@@ -79,32 +79,32 @@ NMI_MASK = 0x80000000
 
 /*
  * Exception entry point. This expects an error code/orig_rax on the stack
- * and the exception handler in %rax.	
- */ 		  				
+ * and the exception handler in %rax.
+ */
 ENTRY(error_entry)
 	/* rdi slot contains rax, oldrax contains error code */
-	cld	
+	cld
 	subq  $14*8,%rsp
 	movq %rsi,13*8(%rsp)
 	movq 14*8(%rsp),%rsi	/* load rax from rdi slot */
 	movq %rdx,12*8(%rsp)
 	movq %rcx,11*8(%rsp)
-	movq %rsi,10*8(%rsp)	/* store rax */ 
+	movq %rsi,10*8(%rsp)	/* store rax */
 	movq %r8, 9*8(%rsp)
 	movq %r9, 8*8(%rsp)
 	movq %r10,7*8(%rsp)
 	movq %r11,6*8(%rsp)
-	movq %rbx,5*8(%rsp) 
-	movq %rbp,4*8(%rsp) 
-	movq %r12,3*8(%rsp) 
-	movq %r13,2*8(%rsp) 
-	movq %r14,1*8(%rsp) 
-	movq %r15,(%rsp) 
+	movq %rbx,5*8(%rsp)
+	movq %rbp,4*8(%rsp)
+	movq %r12,3*8(%rsp)
+	movq %r13,2*8(%rsp)
+	movq %r14,1*8(%rsp)
+	movq %r15,(%rsp)
 
 error_call_handler:
-	movq %rdi, RDI(%rsp)            
+	movq %rdi, RDI(%rsp)
 	movq %rsp,%rdi
-	movq ORIG_RAX(%rsp),%rsi	# get error code 
+	movq ORIG_RAX(%rsp),%rsi	# get error code
 	movq $-1,ORIG_RAX(%rsp)
 	call *%rax
 	jmp error_exit
@@ -113,11 +113,11 @@ error_call_handler:
     movq (%rsp),%rcx
     movq 8(%rsp),%r11
     addq $0x10,%rsp /* skip rcx and r11 */
-	pushq $0	/* push error code/oldrax */ 
-	pushq %rax	/* push real oldrax to the rdi slot */ 
+	pushq $0	/* push error code/oldrax */
+	pushq %rax	/* push real oldrax to the rdi slot */
 	leaq  \sym(%rip),%rax
 	jmp error_entry
-.endm	
+.endm
 
 .macro errorentry sym
         movq (%rsp),%rcx
@@ -149,17 +149,17 @@ ENTRY(hypervisor_callback)
     zeroentry hypervisor_callback2
 
 ENTRY(hypervisor_callback2)
-        movq %rdi, %rsp 
+        movq %rdi, %rsp
 11:     movq %gs:8,%rax
         incl %gs:0
         cmovzq %rax,%rsp
         pushq %rdi
-        call do_hypervisor_callback 
+        call do_hypervisor_callback
         popq %rsp
         decl %gs:0
         jmp error_exit
 
-restore_all_enable_events:  
+restore_all_enable_events:
 	XEN_UNBLOCK_EVENTS(%rsi)        # %rsi is already set up...
 
 scrit:	/**** START OF CRITICAL REGION ****/
@@ -168,16 +168,16 @@ scrit:	/**** START OF CRITICAL REGION ****/
 	XEN_PUT_VCPU_INFO(%rsi)
         RESTORE_ALL
         HYPERVISOR_IRET 0
-        
+
 14:	XEN_LOCKED_BLOCK_EVENTS(%rsi)
 	XEN_PUT_VCPU_INFO(%rsi)
 	subq $6*8,%rsp
-	movq %rbx,5*8(%rsp) 
-	movq %rbp,4*8(%rsp) 
-	movq %r12,3*8(%rsp) 
-	movq %r13,2*8(%rsp) 
-	movq %r14,1*8(%rsp) 
-	movq %r15,(%rsp) 
+	movq %rbx,5*8(%rsp)
+	movq %rbp,4*8(%rsp)
+	movq %r12,3*8(%rsp)
+	movq %r13,2*8(%rsp)
+	movq %r14,1*8(%rsp)
+	movq %r15,(%rsp)
         movq %rsp,%rdi                  # set the argument again
 	jmp  11b
 ecrit:  /**** END OF CRITICAL REGION ****/
@@ -192,12 +192,12 @@ retint_restore_args:
 	andb $1,%al			# EAX[0] == IRET_EFLAGS.IF & event_mask
 	jnz restore_all_enable_events	#        != 0 => enable event delivery
 	XEN_PUT_VCPU_INFO(%rsi)
-		
+
 	RESTORE_ALL
 	HYPERVISOR_IRET 0
 
 
-error_exit:		
+error_exit:
 	movq (%rsp),%r15
 	movq 1*8(%rsp),%r14
 	movq 2*8(%rsp),%r13
@@ -205,7 +205,7 @@ error_exit:
 	movq 4*8(%rsp),%rbp
 	movq 5*8(%rsp),%rbx
 	addq $6*8,%rsp
-	XEN_BLOCK_EVENTS(%rsi)		
+	XEN_BLOCK_EVENTS(%rsi)
 	jmp retint_kernel
 
 
@@ -241,8 +241,8 @@ ENTRY(overflow)
 
 ENTRY(bounds)
         zeroentry do_bounds
-    
-    
+
+
 ENTRY(invalid_op)
         zeroentry do_invalid_op
 
@@ -262,7 +262,7 @@ ENTRY(segment_not_present)
 /* runs on exception stack */
 ENTRY(stack_segment)
         errorentry do_stack_segment
-                    
+
 
 ENTRY(general_protection)
         errorentry do_general_protection
@@ -278,9 +278,7 @@ ENTRY(divide_error)
 
 ENTRY(spurious_interrupt_bug)
         zeroentry do_spurious_interrupt_bug
-            
+
 
 ENTRY(page_fault)
         errorentry do_page_fault
-
-
