@@ -2,11 +2,11 @@
 
 use {
     crate::{
-        platform::x86_64::hypercall::hypercall2,
+        hypercall,
+        scheduler::{schedule_operation, Command},
         xen_sys::{
             evtchn_port_t, evtchn_send, text_start, xencons_interface, EVTCHNOP_send,
-            SCHEDOP_yield, __HYPERVISOR_event_channel_op, __HYPERVISOR_sched_op, start_info_t,
-            __HYPERVISOR_VIRT_START,
+            __HYPERVISOR_event_channel_op, start_info_t, __HYPERVISOR_VIRT_START,
         },
     },
     core::{
@@ -59,10 +59,10 @@ impl<'a> Writer<'a> {
             let data = self.console.out_prod.wrapping_sub(self.console.out_cons);
 
             unsafe {
-                hypercall2(
+                hypercall!(
                     __HYPERVISOR_event_channel_op,
-                    u64::from(EVTCHNOP_send),
-                    event as *const evtchn_send as u64,
+                    EVTCHNOP_send,
+                    event as *const evtchn_send as u64
                 )
             };
 
@@ -97,21 +97,19 @@ impl<'a> Writer<'a> {
         }
 
         unsafe {
-            hypercall2(
+            hypercall!(
                 __HYPERVISOR_event_channel_op,
-                u64::from(EVTCHNOP_send),
-                &event as *const evtchn_send as u64,
+                EVTCHNOP_send,
+                &event as *const evtchn_send as u64
             )
         };
     }
 
     fn flush(&self) {
-        unsafe {
-            while (self.console).out_cons < (self.console).out_prod {
-                hypercall2(__HYPERVISOR_sched_op, u64::from(SCHEDOP_yield), 0);
-                fence(Ordering::SeqCst);
-            }
-        };
+        while (self.console).out_cons < (self.console).out_prod {
+            schedule_operation(Command::Yield);
+            fence(Ordering::SeqCst);
+        }
     }
 }
 

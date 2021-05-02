@@ -35,7 +35,6 @@ pub extern "C" fn start_kernel(start_info: *mut start_info_t) {
     loop {}
 }
 
-/// Panics if input == 5 otherwise returns
 fn panic_if_5(input: usize) {
     if input == 5 {
         panic!("input was 5");

@@ -1,4 +1,4 @@
-//! Hypercall
+//! x86_64 hypercall functions
 
 use cty::c_long;
 
