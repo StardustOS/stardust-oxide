@@ -1,6 +1,11 @@
 #![no_std]
 
-use xen::{console::Writer, dbg, println, xen_sys::start_info_t};
+use xen::{
+    console::Writer,
+    dbg, println,
+    scheduler::{schedule_operation, Command, ShutdownReason},
+    xen_sys::start_info_t,
+};
 
 #[derive(Debug)]
 struct Foo<'a> {
@@ -44,5 +49,8 @@ fn panic_if_5(input: usize) {
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     println!("{}", info);
+
+    schedule_operation(Command::Shutdown(ShutdownReason::Crash));
+
     loop {}
 }
