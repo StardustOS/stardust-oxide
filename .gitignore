@@ -1,4 +1,6 @@
 *.o
 minimal
 minimal.gz
-/target
+target
+
+.vscode

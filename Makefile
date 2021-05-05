@@ -30,13 +30,12 @@ ASFLAGS  = -D__ASSEMBLY__ $(ARCH_ASFLAGS)
 
 .PHONY: all clean run target/target/debug/libstardust.a
 
-all: $(ARCH_OBJS) traps.o target/target/debug/libstardust.a
+all: $(ARCH_OBJS)  target/target/debug/libstardust.a
 	$(LD) $(LDFLAGS) $^ -o minimal
 	gzip -f -9 -c minimal >minimal.gz
 
 target/target/debug/libstardust.a:
 	cargo build
-	cbindgen --config cbindgen.toml --crate stardust --output include/libstardust.h
 
 clean:
 	rm -f *.o

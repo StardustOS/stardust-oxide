@@ -1,5 +1,6 @@
 #include <xen/arch-x86_64.h>
 #include <xen/features.h>
+#include <xen/xen.h>
 
 .section __xen_guest
 	.ascii	"GUEST_OS=stardust-minimal"
