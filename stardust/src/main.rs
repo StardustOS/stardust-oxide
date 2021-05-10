@@ -1,5 +1,6 @@
 #![no_std]
 #![feature(const_raw_ptr_to_usize_cast)]
+#![no_main]
 
 #[no_mangle]
 pub static mut stack: [u8; 8192] = [0; 8192];

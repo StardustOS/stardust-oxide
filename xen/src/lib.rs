@@ -11,3 +11,13 @@ pub mod console;
 pub mod hypercall;
 pub mod platform;
 pub mod scheduler;
+
+/// Returns a pointer to the start of the `.text` section
+#[inline]
+pub fn text_start() -> *mut u64 {
+    extern "C" {
+        static mut _text: u64;
+    }
+
+    unsafe { &mut _text }
+}

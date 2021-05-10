@@ -1,5 +1,9 @@
+[target.target]
+runner = "./run.sh"
+
 [build]
 target = "target.json"
+rustflags = ["-C", "link-arg=-Tlink.x"]
 
 [unstable]
 build-std = ["core", "compiler_builtins"]

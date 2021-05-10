@@ -3,9 +3,5 @@ name = "stardust"
 version = "0.1.0"
 edition = "2018"
 
-[lib]
-name = "stardust"
-crate-type = ["staticlib"]
-
 [dependencies]
 xen = { path = "../xen" }

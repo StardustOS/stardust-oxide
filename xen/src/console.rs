@@ -4,8 +4,9 @@ use {
     crate::{
         hypercall,
         scheduler::{schedule_operation, Command},
+        text_start,
         xen_sys::{
-            evtchn_port_t, evtchn_send, text_start, xencons_interface, EVTCHNOP_send,
+            evtchn_port_t, evtchn_send, xencons_interface, EVTCHNOP_send,
             __HYPERVISOR_event_channel_op, start_info_t, __HYPERVISOR_VIRT_START,
         },
     },
