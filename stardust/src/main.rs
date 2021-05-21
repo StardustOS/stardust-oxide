@@ -2,18 +2,11 @@
 #![feature(const_raw_ptr_to_usize_cast)]
 #![no_main]
 
-#[no_mangle]
-pub static mut stack: [u8; 8192] = [0; 8192];
-
-#[no_mangle]
-pub static mut xen_features: [u8; XENFEAT_NR_SUBMAPS as usize * 32] =
-    [0; XENFEAT_NR_SUBMAPS as usize * 32];
-
 use xen::{
     console::Writer,
     dbg, println,
     scheduler::{schedule_operation, Command, ShutdownReason},
-    xen_sys::{start_info_t, XENFEAT_NR_SUBMAPS},
+    xen_sys::start_info_t,
 };
 
 mod trap;

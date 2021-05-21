@@ -14,7 +14,7 @@
 #define ENTRY(X) .globl X ; X :
 .globl _start, shared_info, hypercall_page
 
-#define __STACK_SIZE 65536
+#define __STACK_SIZE 16384
 _start:
         cld
         movq stack_start(%rip),%rsp

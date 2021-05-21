@@ -5,6 +5,8 @@
 #![feature(asm)]
 #![deny(missing_docs)]
 
+use xen_sys::XENFEAT_NR_SUBMAPS;
+
 pub use xen_sys;
 
 pub mod console;
@@ -21,3 +23,12 @@ pub fn text_start() -> *mut u64 {
 
     unsafe { &mut _text }
 }
+
+/// Allocate kernel stack in BSS
+#[no_mangle]
+pub static mut stack: [u8; 16384] = [0; 16384];
+
+/// ?
+#[no_mangle]
+pub static mut xen_features: [u8; XENFEAT_NR_SUBMAPS as usize * 32] =
+    [0; XENFEAT_NR_SUBMAPS as usize * 32];
