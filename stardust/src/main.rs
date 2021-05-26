@@ -1,5 +1,8 @@
 #![no_std]
 #![feature(const_raw_ptr_to_usize_cast)]
+#![feature(custom_test_frameworks)]
+#![test_runner(crate::test_runner)]
+#![reexport_test_harness_main = "test_main"]
 #![no_main]
 
 use xen::{
@@ -34,6 +37,9 @@ pub extern "C" fn start_kernel(start_info: *mut start_info_t) {
 
     trap::init();
 
+    #[cfg(test)]
+    test_main();
+
     let foo = Foo {
         a: -14351253,
         b: 0xFE,
@@ -59,4 +65,25 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     schedule_operation(Command::Shutdown(ShutdownReason::Crash));
 
     loop {}
+}
+
+#[cfg(test)]
+fn test_runner(tests: &[&dyn Fn()]) {
+    println!("Running {} tests", tests.len());
+
+    for test in tests {
+        test();
+    }
+
+    println!("All tests passed");
+
+    schedule_operation(Command::Shutdown(ShutdownReason::Poweroff));
+}
+
+#[cfg(test)]
+mod test {
+    #[test_case]
+    fn example() {
+        assert_eq!(2 + 2, 4);
+    }
 }
