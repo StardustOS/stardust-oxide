@@ -2,6 +2,8 @@
 
 # `stardust-oxide`
 
+[![CI](https://github.com/StardustOS/stardust-oxide/actions/workflows/ci.yml/badge.svg)](https://github.com/StardustOS/stardust-oxide/actions/workflows/ci.yml)
+
 ## Usage
 
 ### Requirements
