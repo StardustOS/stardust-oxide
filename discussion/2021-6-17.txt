@@ -1,0 +1,89 @@
+Notes on Stardust Oxide Meeting 17/6/2021
+Josh Wheeler
+Ferdia McKeogh 
+Ward Jaradat
+Jon Lewis
+Al Dearle
+
+
+Discussions centered on the rewrite of Stardust in Rust. But is it a rewrite or a new OS? If a new OS what is the purpose?
+Al suggested that the central idea of Stardust was still vaid - small footprint, computations in geograhically appropriate locations.
+Ward led discussion on a language to specify such computations (like the functional thing whose name I have forgotten).
+Al didn't think that was the focus of this project and suggested that there were already computational models that did this to some extent - especially streaming models like Apache Spark [1] (lectures on this in CS1003 if anyone interested.)
+Is there a spark implementation in Rust? Josh mentioned Constellation [2].
+
+There was a suggestion from Ferdia to start from something small and working and build out - like an HTTP server.
+
+Much on the discussion was on how to get the basic OS structure up and running:
+
+	1. Scheduling/threading
+	2. Networking
+	3. Memory management
+	4. File systems
+	5. Synchronisation
+	
+1. Scheduling threading.
+
+Various avenues were explored:
+
+	i.   Write a new Scheduler/concurrency control.
+	ii. Cross compile existing scheduler.
+	iii. Wrap existing scheduler
+	
+1. Writing a new scheduler seems like a project in its own right - is complex, and hard to get right.
+ii. We could cross compile the scheduler into Rust [3,4] and then tidy.
+	There are issues with C format needed for assembly code.
+	Problems with link lists
+	Problems with obscure macros.
+	Potential issues with sync/spinlocks (but the scheduler does work)
+	Al still thinks this is worthy of investigation - wrap macros, translate and clean it up.
+	We don't know how good/bad/hard/easy this would be.
+iii. The third option is to just have a small functional interface to the scheduler and leave it to later.
+	 This might be the beginning of the end to creating a clean OS in Rust.
+	 This would use FFI.
+	 
+
+2. Networking
+
+A small TCP implementation in Rust exists (SMOLTCP) [5]. This could be married to the Xen network interface [6].
+This seems like a sound route which should not be too hard. I think there was agreement on this!
+
+3. Memory management
+
+This needs to be tackled and was only discussed a little.
+There is a slab allocator for Rust [7].
+There would also be a need to do basic page allocation (not that hard?)
+
+4. File Systems
+
+General agreement (I think) on using a network file system interface. Ward also mentioned an in memory file system.
+
+5. Synchronisation
+
+There was a discussion about using pre existing Rust libraries to do concurrency control.
+Not sure all agreed.
+There are a few synchronisation libraries in Rust [spin] [conc]
+
+
+References discussed/shared
+
+[1] https://spark.apache.org/examples.html
+
+[2] https://github.com/constellation-rs/constellation
+
+[3] https://c2rust.com/
+
+[4] https://github.com/jameysharp/corrode
+
+[5] https://news.ycombinator.com/item?id=20230163
+
+[6] https://wiki.xenproject.org/wiki/Xen_Networking#Paravirtualised_Network_Devices
+
+[7] https://github.com/ezrosent/allocators-rs/tree/master/slab-alloc
+
+[8] https://lib.rs/concurrency
+
+[9] https://lib.rs/crates/spin
+
+
+
