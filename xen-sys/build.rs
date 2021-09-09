@@ -12,6 +12,7 @@ fn main() {
         .header("wrapper.h")
         // override clang target
         .clang_arg("--target=x86_64-pc-linux-gnu")
+        .derive_debug(true)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("Failed to generate bindings");

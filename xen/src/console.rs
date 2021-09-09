@@ -69,7 +69,7 @@ impl<'a> Writer<'a> {
 
             fence(Ordering::SeqCst);
 
-            if !(data >= 2048) {
+            if data < 2048 {
                 break;
             }
         }
