@@ -1,7 +1,6 @@
 cargo-features = ["strip"]
 
 [workspace]
-
 members = [
     "stardust",
     "xen",

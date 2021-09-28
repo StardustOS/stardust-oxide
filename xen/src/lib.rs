@@ -13,20 +13,11 @@ pub mod console;
 pub mod hypercall;
 pub mod platform;
 pub mod scheduler;
-
-/// Returns a pointer to the start of the `.text` section
-#[inline]
-pub fn text_start() -> *mut u64 {
-    extern "C" {
-        static mut _text: u64;
-    }
-
-    unsafe { &mut _text }
-}
+pub mod sections;
 
 /// Allocate kernel stack in BSS
 #[no_mangle]
-pub static mut stack: [u8; 16384] = [0; 16384];
+pub static mut stack: [u8; 65536] = [0; 65536];
 
 /// ?
 #[no_mangle]
