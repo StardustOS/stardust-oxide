@@ -1,3 +1,5 @@
+cargo-features = ["strip"]
+
 [workspace]
 
 members = [
@@ -5,3 +7,7 @@ members = [
     "xen",
     "xen-sys"
 ]
+
+[profile.release]
+strip = true
+lto = true

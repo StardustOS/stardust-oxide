@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(const_raw_ptr_to_usize_cast)]
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
