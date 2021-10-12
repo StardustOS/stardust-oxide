@@ -1,0 +1,35 @@
+name: Documentation
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  documentation:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install Xen
+        run: |
+          sudo apt update
+          sudo apt install -y xen-hypervisor-common xen-system-amd64 xen-tools xen-utils-common xenstore-utils libxen-dev
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          components: rust-src
+
+      - name: Build Documentation
+        run: cargo doc --all
+
+      - name: Deploy Docs
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./target/target/doc
+          force_orphan: true

@@ -4,28 +4,30 @@ on:
 
 jobs:
   build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+      - name: Checkout sources
+        uses: actions/checkout@v2
 
-    - name: Install Xen
-      run: |
-        sudo apt update
-        sudo apt install -y xen-hypervisor-common xen-system-amd64 xen-tools xen-utils-common xenstore-utils libxen-dev
+      - name: Install Xen
+        run: |
+          sudo apt update
+          sudo apt install -y xen-hypervisor-common xen-system-amd64 xen-tools xen-utils-common xenstore-utils libxen-dev
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
-        profile: minimal
-        components: rustfmt, rust-src
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          components: rustfmt, rust-src
 
-    - name: Check Formatting
-      run: cargo fmt --all -- --check
+      - name: Check Formatting
+        run: cargo fmt --all -- --check
 
-    - name: Build
-      run: cargo build
+      - name: Build
+        run: cargo build
 
-    # Disabled until a method for running Xen in GitHub Actions is found
-    #- name: Run
-    #  run: cargo run
+      # Disabled until a method for running Xen in GitHub Actions is found
+      #- name: Run
+      #  run: cargo run
