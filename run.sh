@@ -16,7 +16,7 @@ trap "rm -f $temp_file" 0 2 3 15
 
 # create config fuke
 echo "kernel = \"$1\"" >> $temp_file
-echo "memory = 4" >> $temp_file
+echo "memory = 32" >> $temp_file
 echo "name = \"stardust\"" >> $temp_file
 echo "on_crash = 'destroy'" >> $temp_file
 

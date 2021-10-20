@@ -2,6 +2,7 @@
 
 #![no_std]
 #![feature(alloc_error_handler)]
+#![feature(const_mut_refs)]
 #![deny(missing_docs)]
 
 extern crate alloc;
@@ -40,9 +41,16 @@ pub fn launch(start_info: &start_info_t) {
     #[cfg(test)]
     test_main();
 
-    let mut a = Vec::new();
-    a.push(100i32);
-    dbg!(a);
+    {
+        let mut a = Vec::new();
+        for i in 0..16000 {
+            a.push((i % 256) as u8);
+        }
+        for i in (0..16000).rev() {
+            assert_eq!(a.pop().unwrap(), (i % 256) as u8);
+        }
+        dbg!(a);
+    }
 
     unimplemented!("initialisation and idle loop")
 }
@@ -56,6 +64,7 @@ fn print_start_info(start_info: &start_info_t) {
     println!("    nr_pages: {}", start_info.nr_pages);
     println!("    shared_info: {:#x}", start_info.shared_info);
     println!("    pt_base: {:#x}", start_info.pt_base);
+    println!("    mfn_list: {:?}", start_info.mfn_list);
     println!("    mod_start: {:#x}", start_info.mod_start);
     println!("    mod_len: {}", start_info.mod_len);
 }

@@ -3,11 +3,11 @@
 use {
     crate::hypercall,
     xen_sys::{
-        SCHEDOP_block, SCHEDOP_pin_override, SCHEDOP_poll, SCHEDOP_remote_shutdown,
-        SCHEDOP_shutdown, SCHEDOP_shutdown_code, SCHEDOP_watchdog, SCHEDOP_yield, SHUTDOWN_crash,
-        SHUTDOWN_poweroff, SHUTDOWN_reboot, SHUTDOWN_suspend, SHUTDOWN_watchdog,
-        __HYPERVISOR_sched_op, evtchn_port_t, sched_pin_override_t, sched_poll_t,
-        sched_remote_shutdown_t, sched_shutdown_t, sched_watchdog_t,
+        evtchn_port_t, sched_pin_override_t, sched_poll_t, sched_remote_shutdown_t,
+        sched_shutdown_t, sched_watchdog_t, SCHEDOP_block, SCHEDOP_pin_override, SCHEDOP_poll,
+        SCHEDOP_remote_shutdown, SCHEDOP_shutdown, SCHEDOP_shutdown_code, SCHEDOP_watchdog,
+        SCHEDOP_yield, SHUTDOWN_crash, SHUTDOWN_poweroff, SHUTDOWN_reboot, SHUTDOWN_suspend,
+        SHUTDOWN_watchdog, __HYPERVISOR_sched_op,
     },
 };
 
@@ -96,7 +96,7 @@ pub enum ShutdownReason {
     Watchdog = SHUTDOWN_watchdog as isize,
 }
 
-unsafe fn hypercall_sched_op(cmd: u32, arg: u64) -> i64 {
+unsafe fn sched_op(cmd: u32, arg: u64) -> i64 {
     hypercall!(__HYPERVISOR_sched_op, cmd, arg)
 }
 
@@ -104,14 +104,14 @@ unsafe fn hypercall_sched_op(cmd: u32, arg: u64) -> i64 {
 pub fn schedule_operation(cmd: Command) {
     unsafe {
         match cmd {
-            Command::Yield => hypercall_sched_op(SCHEDOP_yield, 0),
-            Command::Block => hypercall_sched_op(SCHEDOP_block, 0),
+            Command::Yield => sched_op(SCHEDOP_yield, 0),
+            Command::Block => sched_op(SCHEDOP_block, 0),
             Command::Shutdown(reason) => {
                 let arg = sched_shutdown_t {
                     reason: reason as u32,
                 };
 
-                hypercall_sched_op(SCHEDOP_shutdown, &arg as *const sched_shutdown_t as u64)
+                sched_op(SCHEDOP_shutdown, &arg as *const sched_shutdown_t as u64)
             }
             Command::Poll { ports, timeout } => {
                 let arg = sched_poll_t {
@@ -120,7 +120,7 @@ pub fn schedule_operation(cmd: Command) {
                     timeout,
                 };
 
-                hypercall_sched_op(SCHEDOP_poll, &arg as *const sched_poll_t as u64)
+                sched_op(SCHEDOP_poll, &arg as *const sched_poll_t as u64)
             }
             Command::RemoteShutdown { domain_id, reason } => {
                 let arg = sched_remote_shutdown_t {
@@ -128,7 +128,7 @@ pub fn schedule_operation(cmd: Command) {
                     reason: reason as u32,
                 };
 
-                hypercall_sched_op(
+                sched_op(
                     SCHEDOP_remote_shutdown,
                     &arg as *const sched_remote_shutdown_t as u64,
                 )
@@ -138,7 +138,7 @@ pub fn schedule_operation(cmd: Command) {
                     reason: reason as u32,
                 };
 
-                hypercall_sched_op(
+                sched_op(
                     SCHEDOP_shutdown_code,
                     &arg as *const sched_shutdown_t as u64,
                 )
@@ -146,12 +146,12 @@ pub fn schedule_operation(cmd: Command) {
             Command::Watchdog { id, timeout } => {
                 let arg = sched_watchdog_t { id, timeout };
 
-                hypercall_sched_op(SCHEDOP_watchdog, &arg as *const sched_watchdog_t as u64)
+                sched_op(SCHEDOP_watchdog, &arg as *const sched_watchdog_t as u64)
             }
             Command::PinOverride { pcpu } => {
                 let arg = sched_pin_override_t { pcpu };
 
-                hypercall_sched_op(
+                sched_op(
                     SCHEDOP_pin_override,
                     &arg as *const sched_pin_override_t as u64,
                 )

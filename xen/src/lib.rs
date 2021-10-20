@@ -5,19 +5,24 @@
 #![feature(asm)]
 #![deny(missing_docs)]
 
-use xen_sys::XENFEAT_NR_SUBMAPS;
+use xen_sys::{domid_t, XENFEAT_NR_SUBMAPS};
 
 pub use xen_sys;
 
 pub mod console;
 pub mod hypercall;
+pub mod memory;
 pub mod platform;
 pub mod scheduler;
 pub mod sections;
+pub mod trap;
+
+/// Domain ID of this domain
+pub const DOMID_SELF: domid_t = 0x7FF0;
 
 /// Allocate kernel stack in BSS
 #[no_mangle]
-pub static mut stack: [u8; 65536] = [0; 65536];
+pub static mut stack: [u8; 262144] = [0; 262144];
 
 /// ?
 #[no_mangle]

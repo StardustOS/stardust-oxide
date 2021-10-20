@@ -2,7 +2,7 @@
 
 use xen::{
     dbg,
-    hypercall::{set_trap_table, TrapInfo},
+    trap::{set_trap_table, TrapInfo},
     xen_sys::FLAT_KERNEL_CS,
 };
 
