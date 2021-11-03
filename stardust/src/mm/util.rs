@@ -1,3 +1,28 @@
+//! Utility structures and functions
+//!
+//! Consists of wrapper types representing different kinds of memory locations. The following diagram describes the conversions between them:
+//!
+//! ```text
+//! ┌──────────────────┐           ┌───────────────┐
+//! │MachineFrameNumber│◀─────────▶│PageFrameNumber│
+//! └──────────────────┘           └───────────────┘
+//!      ▲        ▲                        ▲
+//!      │        │      ┌─────────┐       │
+//!      │        └──────│PageEntry│───┐   │
+//!      │               └─────────┘   │   │
+//!      │                             ▼   ▼
+//!      │                         ┌──────────────┐       ┌──────────────┐
+//!      └────────────────────────▶│VirtualAddress│◀─────▶│MachineAddress│
+//!                                └──────────────┘       └──────────────┘
+//!                                        ▲                      ▲
+//!                                        │                      │
+//!                                        │                      │
+//!                                        ▼                      │
+//!                                ┌───────────────┐              │
+//!                                │PhysicalAddress│◀─────────────┘
+//!                                └───────────────┘
+//! ```
+
 use {
     core::{
         convert::TryInto,

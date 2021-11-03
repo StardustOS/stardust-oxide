@@ -22,8 +22,8 @@ use {
     },
 };
 
-mod allocator;
-mod util;
+pub mod allocator;
+pub mod util;
 
 /// Initialise kernel memory management
 pub fn init(start_info: &start_info_t) {

@@ -1,3 +1,5 @@
+//! Kernel memory allocator
+
 use {linked_list_allocator::LockedHeap, xen::println};
 
 #[global_allocator]
