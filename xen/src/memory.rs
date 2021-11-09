@@ -1,7 +1,7 @@
 //! Memory management utilities and balloon driver
 
 use {
-    crate::{hypercall, DOMID_SELF},
+    crate::{hypercall, println, DOMID_SELF},
     xen_sys::{__HYPERVISOR_memory_op, __HYPERVISOR_mmu_update, domid_t, mmu_update_t},
 };
 
@@ -65,7 +65,12 @@ pub fn hypervisor_mmu_update(reqs: &[mmu_update_t]) -> i64 {
     };
 
     if success_count != reqs.len() {
-        panic!("MMU update had different number of successes to number of requests")
+        println!(
+            "MMU update had different number of successes to number of requests: {} != {}, rc = {}",
+            success_count,
+            reqs.len(),
+            rc
+        )
     }
 
     rc
