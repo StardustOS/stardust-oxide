@@ -20,10 +20,6 @@ pub mod trap;
 /// Domain ID of this domain
 pub const DOMID_SELF: domid_t = 0x7FF0;
 
-/// Allocate kernel stack in BSS
-#[no_mangle]
-pub static mut stack: [u8; 262144] = [0; 262144];
-
 /// ?
 #[no_mangle]
 pub static mut xen_features: [u8; XENFEAT_NR_SUBMAPS as usize * 32] =

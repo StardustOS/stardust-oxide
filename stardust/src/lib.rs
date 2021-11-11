@@ -12,7 +12,7 @@ use {
     core::{slice, str},
     xen::{
         console::Writer,
-        dbg, println,
+        println,
         scheduler::{schedule_operation, Command, ShutdownReason},
         xen_sys::start_info_t,
     },
@@ -43,13 +43,14 @@ pub fn launch(start_info: &start_info_t) {
 
     {
         let mut a = Vec::new();
-        for i in 0..16000 {
+        for i in 0..8_000_000 {
             a.push((i % 256) as u8);
         }
-        for i in (0..16000).rev() {
+        println!("allocated array of size {} bytes", a.len());
+        for i in (0..8_000_000).rev() {
             assert_eq!(a.pop().unwrap(), (i % 256) as u8);
         }
-        dbg!(a);
+        assert_eq!(a.len(), 0);
     }
 
     unimplemented!("initialisation and idle loop")
@@ -62,10 +63,10 @@ fn print_start_info(start_info: &start_info_t) {
     .unwrap();
     println!("    platform: {}", magic_str);
     println!("    nr_pages: {}", start_info.nr_pages);
-    println!("    shared_info: {:#x}", start_info.shared_info);
-    println!("    pt_base: {:#x}", start_info.pt_base);
-    println!("    mfn_list: {:?}", start_info.mfn_list);
-    println!("    mod_start: {:#x}", start_info.mod_start);
+    println!("    shared_info: {:#X}", start_info.shared_info);
+    println!("    pt_base: {:#X}", start_info.pt_base);
+    println!("    mfn_list: {:#X}", start_info.mfn_list);
+    println!("    mod_start: {:#X}", start_info.mod_start);
     println!("    mod_len: {}", start_info.mod_len);
 }
 

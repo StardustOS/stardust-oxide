@@ -29,12 +29,15 @@ pub mod util;
 pub fn init(start_info: &start_info_t) {
     println!();
     println!("Initalising kernel memory management...");
-    println!("                 _text: {:#x}", text_start());
-    println!("                _etext: {:#x}", etext());
-    println!("              _erodata: {:#x}", erodata());
-    println!("                _edata: {:#x}", edata());
-    println!("           stack start: {:p}", unsafe { &xen::stack });
-    println!("                  _end: {:#x}", end());
+    println!("                 _text: {:#X}", text_start());
+    println!("                _etext: {:#X}", etext());
+    println!("              _erodata: {:#X}", erodata());
+    println!("                _edata: {:#X}", edata());
+    println!("                  _end: {:#X}", end());
+
+    if start_info.mfn_list < end() as u64 {
+        panic!("MFN_LIST must be beyond end of program, this can cause corruption!")
+    }
 
     // initialize the mapping between page frame numbers and machine frame numbers
     init_mfn_list(
@@ -66,8 +69,8 @@ pub fn init(start_info: &start_info_t) {
         max_pfn.0 = (MAX_MEM_SIZE / PAGE_SIZE) - 1;
     }
 
-    println!("             start_pfn: {:?}", start_pfn);
-    println!("               max_pfn: {:?}", max_pfn);
+    println!("             start_pfn: {:?}", start_pfn.0);
+    println!("               max_pfn: {:?}", max_pfn.0);
 
     println!("current reserved pages: {}", get_current_pages());
     println!("    max reserved pages: {}", get_max_pages());
@@ -192,13 +195,12 @@ unsafe fn new_pt_frame(
         level, pt_pfn.0, prev_l_mfn.0, offset
     );
 
-    /* We need to clear the page, otherwise we might fail to map it
-    as a page table page */
+    // clear the page otherwise might fail to map it as a page table page
     ptr::write_bytes(pt_page.0 as *mut u8, 0, PAGE_SIZE);
 
     assert!(level >= 1 && level <= PAGETABLE_LEVELS);
 
-    /* Make PFN a page table page */
+    // Make PFN a page table page
     let mut tab = pt_base;
     tab = VirtualAddress::from(*tab.offset(l4_table_offset(pt_page))).0 as *mut PageEntry;
     tab = VirtualAddress::from(*tab.offset(l3_table_offset(pt_page))).0 as *mut PageEntry;
@@ -218,7 +220,7 @@ unsafe fn new_pt_frame(
         );
     }
 
-    /* Hook the new page table page into the hierarchy */
+    // Hook the new page table page into the hierarchy
     mmu_updates[0].ptr =
         ((prev_l_mfn.0 << PAGE_SHIFT) + size_of::<PageEntry>() * offset as usize) as u64;
     mmu_updates[0].val =
