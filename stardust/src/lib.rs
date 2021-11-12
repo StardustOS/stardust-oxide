@@ -8,11 +8,11 @@
 extern crate alloc;
 
 use {
-    alloc::vec::Vec,
+    alloc::{format, vec::Vec},
     core::{slice, str},
     xen::{
         console::Writer,
-        println,
+        dbg, println,
         scheduler::{schedule_operation, Command, ShutdownReason},
         xen_sys::start_info_t,
     },
@@ -42,15 +42,23 @@ pub fn launch(start_info: &start_info_t) {
     test_main();
 
     {
-        let mut a = Vec::new();
-        for i in 0..8_000_000 {
+        let mut a = Vec::with_capacity(33_310_000);
+        for i in 0..33_310_000 {
             a.push((i % 256) as u8);
         }
-        println!("allocated array of size {} bytes", a.len());
-        for i in (0..8_000_000).rev() {
+        for i in (0..33_310_000).rev() {
             assert_eq!(a.pop().unwrap(), (i % 256) as u8);
         }
         assert_eq!(a.len(), 0);
+    }
+
+    {
+        let mut a = Vec::with_capacity(500_000);
+        for i in 0..500_000 {
+            let str = format!("string number {}", i);
+            a.push(str);
+        }
+        dbg!(&a[499_995..]);
     }
 
     unimplemented!("initialisation and idle loop")

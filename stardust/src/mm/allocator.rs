@@ -1,17 +1,18 @@
 //! Kernel memory allocator
 
-use {linked_list_allocator::LockedHeap, xen::println};
+use {crate::mm::util::VirtualAddress, linked_list_allocator::LockedHeap, xen::println};
 
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 /// Initialize allocator
-pub unsafe fn init(heap_start: usize, heap_size: usize) {
+pub unsafe fn init(heap_start: VirtualAddress, heap_size: usize) {
     println!(
         "Initialising allocator with heap start {:#x} and length {}",
-        heap_start, heap_size
+        heap_start.0, heap_size
     );
-    ALLOCATOR.lock().init(heap_start, heap_size);
+
+    ALLOCATOR.lock().init(heap_start.0, heap_size);
 }
 
 #[alloc_error_handler]
