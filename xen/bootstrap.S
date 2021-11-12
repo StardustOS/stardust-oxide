@@ -2,7 +2,7 @@
 #include <xen/features.h>
 
 .section __xen_guest
-	.ascii	"GUEST_OS=stardust-minimal"
+	.ascii	"GUEST_OS=stardust-oxide"
 	.ascii	",XEN_VER=xen-3.0"
 	.ascii	",VIRT_BASE=0x0" /* &_text from minios_x86_64.lds */
 	.ascii	",ELF_PADDR_OFFSET=0x0"
@@ -14,16 +14,11 @@
 #define ENTRY(X) .globl X ; X :
 .globl _start, shared_info, hypercall_page
 
-#define __STACK_SIZE 16384
 _start:
         cld
-        movq stack_start(%rip),%rsp
-        andq $(~(__STACK_SIZE-1)), %rsp
+		movq $(__STACK_END),%rsp
         movq %rsi,%rdi
         call start_kernel
-
-stack_start:
-        .quad stack+(2*__STACK_SIZE)
 
         /* Unpleasant -- the PTE that maps this page is actually overwritten */
         /* to map the real shared-info page! :-)                             */

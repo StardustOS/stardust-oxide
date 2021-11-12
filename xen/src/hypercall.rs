@@ -1,7 +1,5 @@
 //! Platform-agnostic hypercall interface
 
-use xen_sys::__HYPERVISOR_set_trap_table;
-
 /// Software trap from a domain to the hypervisor used to request privileged operations
 #[macro_export]
 macro_rules! hypercall {
@@ -41,25 +39,4 @@ macro_rules! hypercall {
             u64::from($arg4),
         )
     };
-}
-
-/// Information for trap handler
-#[repr(C)]
-pub struct TrapInfo {
-    /// Exception vector
-    pub vector: u8,
-    /// 0-3 privilege level, 4 clear event enable
-    pub flags: u8,
-    /// Code selector
-    pub cs: u16,
-    /// Handler function pointer
-    pub address: *const (),
-}
-
-// *const () is not sync
-unsafe impl Sync for TrapInfo {}
-
-/// Registers a trap handler table
-pub fn set_trap_table(table: &'static [TrapInfo]) -> i64 {
-    unsafe { hypercall!(__HYPERVISOR_set_trap_table, table.as_ptr() as u64) }
 }

@@ -1,6 +1,8 @@
+//! Trap handlers
+
 use xen::{
     dbg,
-    hypercall::{set_trap_table, TrapInfo},
+    trap::{set_trap_table, TrapInfo},
     xen_sys::FLAT_KERNEL_CS,
 };
 
@@ -141,91 +143,109 @@ extern "C" {
 }
 
 #[no_mangle]
+/// Handler for divide error trap
 pub extern "C" fn do_divide_error() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for debug trap
 pub extern "C" fn do_debug() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for int3 trap
 pub extern "C" fn do_int3() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for overflow trap
 pub extern "C" fn do_overflow() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for bounds trap
 pub extern "C" fn do_bounds() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for invalid operation trap
 pub extern "C" fn do_invalid_op() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for device not available trap
 pub extern "C" fn do_device_not_available() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for coprocessor segment overrun trap
 pub extern "C" fn do_coprocessor_segment_overrun() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for invalid TSS trap
 pub extern "C" fn do_invalid_TSS() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for segment not present trap
 pub extern "C" fn do_segment_not_present() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for do stack segment trap
 pub extern "C" fn do_stack_segment() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for general protection trap
 pub extern "C" fn do_general_protection() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for page fault trap
 pub extern "C" fn do_page_fault() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for dspurious interrupt trap
 pub extern "C" fn do_spurious_interrupt_bug() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for coprocessor error trap
 pub extern "C" fn do_coprocessor_error() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for alignment check trap
 pub extern "C" fn do_alignment_check() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for SIMD coprocessor trap
 pub extern "C" fn do_simd_coprocessor_error() {
     dbg!()
 }
 
 #[no_mangle]
+/// Handler for hypervisor callback trap
 pub extern "C" fn do_hypervisor_callback() {
     dbg!()
 }

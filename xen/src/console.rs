@@ -4,7 +4,7 @@ use {
     crate::{
         hypercall,
         scheduler::{schedule_operation, Command},
-        text_start,
+        sections::text_start,
         xen_sys::{
             evtchn_port_t, evtchn_send, xencons_interface, EVTCHNOP_send,
             __HYPERVISOR_event_channel_op, start_info_t, __HYPERVISOR_VIRT_START,
@@ -45,7 +45,7 @@ impl<'a> Writer<'a> {
 
         // SAFETY:
         let console = unsafe {
-            &mut *(((*hypervisor_virt_start.offset(page_num) << 12) + text_start() as usize)
+            &mut *(((*hypervisor_virt_start.offset(page_num) << 12) + text_start())
                 as *mut xencons_interface)
         };
 
@@ -69,7 +69,7 @@ impl<'a> Writer<'a> {
 
             fence(Ordering::SeqCst);
 
-            if !(data >= 2048) {
+            if data < 2048 {
                 break;
             }
         }

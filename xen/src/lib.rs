@@ -5,28 +5,20 @@
 #![feature(asm)]
 #![deny(missing_docs)]
 
-use xen_sys::XENFEAT_NR_SUBMAPS;
+use xen_sys::{domid_t, XENFEAT_NR_SUBMAPS};
 
 pub use xen_sys;
 
 pub mod console;
 pub mod hypercall;
+pub mod memory;
 pub mod platform;
 pub mod scheduler;
+pub mod sections;
+pub mod trap;
 
-/// Returns a pointer to the start of the `.text` section
-#[inline]
-pub fn text_start() -> *mut u64 {
-    extern "C" {
-        static mut _text: u64;
-    }
-
-    unsafe { &mut _text }
-}
-
-/// Allocate kernel stack in BSS
-#[no_mangle]
-pub static mut stack: [u8; 16384] = [0; 16384];
+/// Domain ID of this domain
+pub const DOMID_SELF: domid_t = 0x7FF0;
 
 /// ?
 #[no_mangle]

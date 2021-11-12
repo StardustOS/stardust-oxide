@@ -10,6 +10,10 @@ extern "C" {
 }
 
 /// Makes hypercall with 0 arguments
+///
+/// # Safety
+///
+/// `offset` must be a valid offset into `hypercall_page`
 pub unsafe fn hypercall0(offset: u32) -> c_long {
     let mut res: c_long;
     let entry = hypercall_page.as_ptr().offset(offset as isize);
@@ -28,6 +32,10 @@ pub unsafe fn hypercall0(offset: u32) -> c_long {
 }
 
 /// Makes hypercall with 1 argument
+///
+/// # Safety
+///
+/// `offset` must be a valid offset into `hypercall_page`
 pub unsafe fn hypercall1(offset: u32, arg0: u64) -> c_long {
     let mut res: c_long;
     let entry = hypercall_page.as_ptr().offset(offset as isize);
@@ -48,6 +56,10 @@ pub unsafe fn hypercall1(offset: u32, arg0: u64) -> c_long {
 }
 
 /// Makes hypercall with 2 arguments
+///
+/// # Safety
+///
+/// `offset` must be a valid offset into `hypercall_page`
 pub unsafe fn hypercall2(offset: u32, arg0: u64, arg1: u64) -> c_long {
     let mut res: c_long;
     let entry = hypercall_page.as_ptr().offset(offset as isize);
@@ -69,6 +81,10 @@ pub unsafe fn hypercall2(offset: u32, arg0: u64, arg1: u64) -> c_long {
 }
 
 /// Makes hypercall with 3 arguments
+///
+/// # Safety
+///
+/// `offset` must be a valid offset into `hypercall_page`
 pub unsafe fn hypercall3(offset: u32, arg0: u64, arg1: u64, arg2: u64) -> c_long {
     let mut res: c_long;
     let entry = hypercall_page.as_ptr().offset(offset as isize);
@@ -91,6 +107,10 @@ pub unsafe fn hypercall3(offset: u32, arg0: u64, arg1: u64, arg2: u64) -> c_long
 }
 
 /// Makes hypercall with 4 arguments
+///
+/// # Safety
+///
+/// `offset` must be a valid offset into `hypercall_page`
 pub unsafe fn hypercall4(offset: u32, arg0: u64, arg1: u64, arg2: u64, arg3: u64) -> c_long {
     let mut res: c_long;
     let entry = hypercall_page.as_ptr().offset(offset as isize);
@@ -114,6 +134,10 @@ pub unsafe fn hypercall4(offset: u32, arg0: u64, arg1: u64, arg2: u64, arg3: u64
 }
 
 /// Makes hypercall with 5 arguments
+///
+/// # Safety
+///
+/// `offset` must be a valid offset into `hypercall_page`
 pub unsafe fn hypercall5(
     offset: u32,
     arg0: u64,

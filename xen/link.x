@@ -53,7 +53,12 @@ SECTIONS
   .bss : {
 	*(.bss)
         *(.app.bss)
-	}
+
+        . = ALIGN(4096) ;
+        __STACK_START = . ;
+        . += 4096 ; /* Defines stack size, must be power of 2 */
+        __STACK_END = . ;
+  }
   _end = . ;
 
 
@@ -72,5 +77,5 @@ SECTIONS
   .stab.index 0 : { *(.stab.index) }
   .stab.indexstr 0 : { *(.stab.indexstr) }
   .comment 0 : { *(.comment) }
-  
+
 }
