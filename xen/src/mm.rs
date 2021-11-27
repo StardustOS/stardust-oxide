@@ -24,11 +24,7 @@
 //! ```
 
 use {
-    core::{
-        convert::TryInto,
-        sync::atomic::{AtomicUsize, Ordering},
-    },
-    xen::{
+    crate::{
         platform::consts::{
             L1_PAGETABLE_ENTRIES, L1_PAGETABLE_SHIFT, L2_PAGETABLE_ENTRIES, L2_PAGETABLE_SHIFT,
             L3_PAGETABLE_ENTRIES, L3_PAGETABLE_SHIFT, L4_PAGETABLE_ENTRIES, L4_PAGETABLE_SHIFT,
@@ -37,16 +33,17 @@ use {
         sections::text_start,
         xen_sys::__HYPERVISOR_VIRT_START,
     },
+    core::convert::TryInto,
 };
 
 /// Pointer to the beginning of the machine frame number list
 ///
 /// Initialized with null pointer, this is probably really bad and **must** be set to the value of the `mfn_list` field of the start info structure before being used.
-static MFN_LIST: AtomicUsize = AtomicUsize::new(0);
+static mut MFN_LIST: *mut usize = core::ptr::null_mut();
 
 /// MFN_LIST must be initialized before converting between PageFrameNumber and MachineFrameNumber
-pub fn init_mfn_list(mfn_list_addr: usize) {
-    MFN_LIST.store(mfn_list_addr, Ordering::SeqCst);
+pub(crate) fn init_mfn_list(mfn_list_addr: usize) {
+    unsafe { MFN_LIST = mfn_list_addr as *mut usize }
 }
 
 /// Page Entry
@@ -86,7 +83,7 @@ pub struct MachineFrameNumber(pub usize);
 impl From<PageFrameNumber> for MachineFrameNumber {
     fn from(pfn: PageFrameNumber) -> Self {
         Self(unsafe {
-            *(MFN_LIST.load(Ordering::Relaxed) as *const usize).offset(
+            *MFN_LIST.offset(
                 pfn.0
                     .try_into()
                     .expect("PageFrameNumber could not be converted to an isize"),

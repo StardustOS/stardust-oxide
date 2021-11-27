@@ -7,4 +7,4 @@ edition = "2018"
 cty = "0.2"
 
 [build-dependencies]
-bindgen = "0.59"
+bindgen = { version = "0.59", default-features = false, features = ["clap", "runtime", "which-rustfmt"] }

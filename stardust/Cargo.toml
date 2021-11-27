@@ -6,3 +6,4 @@ edition = "2018"
 [dependencies]
 xen = { path = "../xen" }
 linked_list_allocator = "0.9"
+log = { version = "0.4", features = ["release_max_level_trace"] }

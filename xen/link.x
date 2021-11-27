@@ -56,7 +56,7 @@ SECTIONS
 
         . = ALIGN(4096) ;
         __STACK_START = . ;
-        . += 4096 ; /* Defines stack size, must be power of 2 */
+        . += 8192 ; /* Defines stack size, must be power of 2 */
         __STACK_END = . ;
   }
   _end = . ;
