@@ -9,14 +9,17 @@ extern crate alloc;
 use {
     alloc::{format, vec::Vec},
     core::{slice, str},
+    log::{debug, error},
     xen::{
         console::Writer,
         init_info, println,
         scheduler::{schedule_operation, Command, ShutdownReason},
+        sections::{edata, end, erodata, etext, text_start},
         xen_sys::start_info_t,
     },
 };
 
+pub mod logger;
 pub mod mm;
 pub mod trap;
 
@@ -28,6 +31,7 @@ pub fn launch(start_info: *mut start_info_t) {
     let start_info = unsafe { &*start_info };
 
     Writer::init(start_info);
+    logger::init();
 
     println!();
     println!("   _____ _____ _____ _____ _____ __ __ _____ _____ ");
@@ -70,18 +74,24 @@ fn print_start_info(start_info: &start_info_t) {
         slice::from_raw_parts(start_info.magic.as_ptr() as *const u8, 32)
     })
     .unwrap();
-    println!("    platform: {}", magic_str);
-    println!("    nr_pages: {}", start_info.nr_pages);
-    println!("    shared_info: {:#X}", start_info.shared_info);
-    println!("    pt_base: {:#X}", start_info.pt_base);
-    println!("    mfn_list: {:#X}", start_info.mfn_list);
-    println!("    mod_start: {:#X}", start_info.mod_start);
-    println!("    mod_len: {}", start_info.mod_len);
+    debug!("   platform: {}", magic_str);
+    debug!("   nr_pages: {}", start_info.nr_pages);
+    debug!("shared_info: {:#X}", start_info.shared_info);
+    debug!("    pt_base: {:#X}", start_info.pt_base);
+    debug!("   mfn_list: {:#X}", start_info.mfn_list);
+    debug!("  mod_start: {:#X}", start_info.mod_start);
+    debug!("    mod_len: {}", start_info.mod_len);
+    debug!("      _text: {:#X}", text_start());
+    debug!("     _etext: {:#X}", etext());
+    debug!("   _erodata: {:#X}", erodata());
+    debug!("     _edata: {:#X}", edata());
+    debug!("       _end: {:#X}", end());
+    debug!("");
 }
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    println!("{}", info);
+    error!("{}", info);
 
     Writer::flush();
 

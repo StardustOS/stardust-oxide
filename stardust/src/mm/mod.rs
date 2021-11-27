@@ -2,6 +2,7 @@
 
 use {
     core::{cmp::min, convert::TryInto, mem::size_of, ptr},
+    log::{debug, info, trace},
     xen::{
         memory::{get_current_pages, get_max_pages, hypervisor_mmu_update},
         mm::{
@@ -12,8 +13,7 @@ use {
             L1_PAGETABLE_ENTRIES, L1_PROT, MAX_MEM_SIZE, PAGETABLE_LEVELS, PAGE_MASK, PAGE_PRESENT,
             PAGE_RW, PAGE_SHIFT, PAGE_SIZE, PT_PROT,
         },
-        println,
-        sections::{edata, end, erodata, etext, text_start},
+        sections::end,
         xen_sys::{mmu_update_t, start_info_t, __HYPERVISOR_VIRT_START},
     },
 };
@@ -22,13 +22,7 @@ pub mod allocator;
 
 /// Initialise kernel memory management
 pub fn init(start_info: &start_info_t) {
-    println!();
-    println!("Initalising kernel memory management...");
-    println!("                 _text: {:#X}", text_start());
-    println!("                _etext: {:#X}", etext());
-    println!("              _erodata: {:#X}", erodata());
-    println!("                _edata: {:#X}", edata());
-    println!("                  _end: {:#X}", end());
+    info!("Initalising memory management");
 
     if start_info.mfn_list < end() as u64 {
         panic!("MFN_LIST must be beyond end of program, this can cause corruption!")
@@ -55,11 +49,11 @@ pub fn init(start_info: &start_info_t) {
     // cannot have more pages than the maximum amount of memory on the current platform
     let max_pfn = PageFrameNumber(min(nr_pages, (MAX_MEM_SIZE / PAGE_SIZE) - 1));
 
-    println!("             start_pfn: {:?}", start_pfn.0);
-    println!("               max_pfn: {:?}", max_pfn.0);
+    debug!("             start_pfn: {:?}", start_pfn.0);
+    debug!("               max_pfn: {:?}", max_pfn.0);
 
-    println!("current reserved pages: {}", get_current_pages());
-    println!("    max reserved pages: {}", get_max_pages());
+    debug!("current reserved pages: {}", get_current_pages());
+    debug!("    max reserved pages: {}", get_max_pages());
 
     let (start_address, size) = unsafe { build_pagetable(pt_base, start_pfn, max_pfn) };
 
@@ -85,7 +79,7 @@ unsafe fn build_pagetable(
     let start_address = VirtualAddress::from(start_pfn);
     let end_address = VirtualAddress::from(max_pfn);
 
-    println!(
+    debug!(
         "Mapping memory range {:#x} - {:#x}",
         start_address.0, end_address.0
     );
@@ -202,9 +196,12 @@ unsafe fn new_pt_frame(
 
     let mut mmu_updates = [mmu_update_t { ptr: 0, val: 0 }; 1];
 
-    println!(
+    trace!(
         "Allocating new L{} page table frame for pfn={}, prev_l_mfn={}, offset={}",
-        level, pt_pfn.0, prev_l_mfn.0, offset
+        level,
+        pt_pfn.0,
+        prev_l_mfn.0,
+        offset
     );
 
     // clear the page otherwise might fail to map it as a page table page
