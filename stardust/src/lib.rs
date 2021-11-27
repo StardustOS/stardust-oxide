@@ -2,7 +2,6 @@
 
 #![no_std]
 #![feature(alloc_error_handler)]
-#![feature(const_mut_refs)]
 #![deny(missing_docs)]
 
 extern crate alloc;
@@ -12,7 +11,7 @@ use {
     core::{slice, str},
     xen::{
         console::Writer,
-        dbg, println,
+        init_info, println,
         scheduler::{schedule_operation, Command, ShutdownReason},
         xen_sys::start_info_t,
     },
@@ -22,7 +21,12 @@ pub mod mm;
 pub mod trap;
 
 /// Launches the kernel with the supplied reference to the start_info structure.
-pub fn launch(start_info: &start_info_t) {
+pub fn launch(start_info: *mut start_info_t) {
+    init_info(start_info);
+
+    // SAFETY: safe to dereference raw pointer as it is valid when provided by Xen
+    let start_info = unsafe { &*start_info };
+
     Writer::init(start_info);
 
     println!();
@@ -38,15 +42,12 @@ pub fn launch(start_info: &start_info_t) {
     trap::init();
     mm::init(start_info);
 
-    #[cfg(test)]
-    test_main();
-
     {
-        let mut a = Vec::with_capacity(33_310_000);
-        for i in 0..33_310_000 {
+        let mut a = Vec::with_capacity(30_000_000);
+        for i in 0..30_000_000 {
             a.push((i % 256) as u8);
         }
-        for i in (0..33_310_000).rev() {
+        for i in (0..30_000_000).rev() {
             assert_eq!(a.pop().unwrap(), (i % 256) as u8);
         }
         assert_eq!(a.len(), 0);
@@ -58,7 +59,7 @@ pub fn launch(start_info: &start_info_t) {
             let str = format!("string number {}", i);
             a.push(str);
         }
-        dbg!(&a[499_995..]);
+        assert_eq!(a.last().unwrap().len(), 20);
     }
 
     unimplemented!("initialisation and idle loop")
@@ -81,6 +82,8 @@ fn print_start_info(start_info: &start_info_t) {
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     println!("{}", info);
+
+    Writer::flush();
 
     schedule_operation(Command::Shutdown(ShutdownReason::Crash));
 

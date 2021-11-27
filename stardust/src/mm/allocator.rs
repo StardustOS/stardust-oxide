@@ -1,6 +1,9 @@
 //! Kernel memory allocator
 
-use {crate::mm::util::VirtualAddress, linked_list_allocator::LockedHeap, xen::println};
+use {
+    linked_list_allocator::LockedHeap,
+    xen::{mm::VirtualAddress, println},
+};
 
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();

@@ -3,14 +3,15 @@
 use {
     crate::{
         hypercall,
+        mm::{MachineFrameNumber, VirtualAddress},
         scheduler::{schedule_operation, Command},
-        sections::text_start,
         xen_sys::{
             evtchn_port_t, evtchn_send, xencons_interface, EVTCHNOP_send,
-            __HYPERVISOR_event_channel_op, start_info_t, __HYPERVISOR_VIRT_START,
+            __HYPERVISOR_event_channel_op, start_info_t,
         },
     },
     core::{
+        convert::TryInto,
         fmt,
         sync::atomic::{fence, Ordering},
     },
@@ -35,18 +36,20 @@ impl<'a> Writer<'a> {
             panic!("WRITER already initialized");
         }
 
-        // SAFETY: sound as long as `start` is a valid reference and the OS is
+        // SAFETY: `start` is a valid reference and the OS is
         // running in an unprivileged (non-Dom0) domain
         let dom_u = unsafe { start.console.domU };
 
-        let page_num = dom_u.mfn as isize;
+        let console = {
+            let virt = VirtualAddress::from(MachineFrameNumber(
+                dom_u
+                    .mfn
+                    .try_into()
+                    .expect("Failed to convert u64 to usize"),
+            ));
 
-        let hypervisor_virt_start = __HYPERVISOR_VIRT_START as *mut usize;
-
-        // SAFETY:
-        let console = unsafe {
-            &mut *(((*hypervisor_virt_start.offset(page_num) << 12) + text_start())
-                as *mut xencons_interface)
+            // SAFETY: will be a valid pointer for the lifetime of the instance
+            unsafe { &mut *(virt.0 as *mut xencons_interface) }
         };
 
         *WRITER.lock() = Some(Writer {
@@ -55,73 +58,63 @@ impl<'a> Writer<'a> {
         });
     }
 
-    fn write_byte(&mut self, event: &evtchn_send, byte: u8) {
-        loop {
-            let data = self.console.out_prod.wrapping_sub(self.console.out_cons);
-
-            unsafe {
-                hypercall!(
-                    __HYPERVISOR_event_channel_op,
-                    EVTCHNOP_send,
-                    event as *const evtchn_send as u64
-                )
-            };
-
-            fence(Ordering::SeqCst);
-
-            if data < 2048 {
-                break;
+    /// Yield until all data has been written
+    pub fn flush() {
+        match *WRITER.lock() {
+            Some(ref mut w) => {
+                while (w.console).out_cons < (w.console).out_prod {
+                    schedule_operation(Command::Yield);
+                    fence(Ordering::SeqCst);
+                }
             }
+            None => panic!("WRITER not initialized"),
+        }
+    }
+
+    fn write_bytes(&mut self, mut bytes: &[u8]) {
+        while bytes.len() > 0 {
+            let sent = self.xencons_write_bytes(bytes);
+            self.event_send();
+            bytes = &bytes[sent..];
         }
 
-        let out_prod = self.console.out_prod;
-        let ring_index = (out_prod & (2047)) as usize;
+        self.event_send();
+    }
 
-        self.console.out[ring_index] = byte as i8;
+    fn xencons_write_bytes(&mut self, bytes: &[u8]) -> usize {
+        let mut sent = 0;
+
+        let intf = &mut self.console;
+
+        let mut prod = intf.out_prod;
 
         fence(Ordering::SeqCst);
 
-        self.console.out_prod += 1;
+        while (sent < bytes.len()) && (((prod - intf.out_cons) as usize) < intf.out.len()) {
+            intf.out[((prod) & (intf.out.len() as u32 - 1)) as usize] = bytes[sent] as i8;
+            prod += 1;
+            sent += 1;
+        }
+
+        fence(Ordering::SeqCst);
+
+        intf.out_prod = prod;
+
+        sent
     }
 
-    fn write_bytes<I: Iterator<Item = u8>>(&mut self, bytes: I) {
-        let event = evtchn_send {
+    fn event_send(&self) {
+        let mut op = evtchn_send {
             port: self.console_evt,
         };
 
-        for byte in bytes {
-            self.write_byte(&event, byte);
-
-            if byte == b'\n' {
-                self.write_byte(&event, b'\r');
-            }
-        }
-
-        unsafe {
-            hypercall!(
-                __HYPERVISOR_event_channel_op,
-                EVTCHNOP_send,
-                &event as *const evtchn_send as u64
-            )
-        };
-    }
-
-    fn flush(&self) {
-        while (self.console).out_cons < (self.console).out_prod {
-            schedule_operation(Command::Yield);
-            fence(Ordering::SeqCst);
-        }
+        event_channel_op(EVTCHNOP_send, &mut op as *mut _ as u64);
     }
 }
 
 impl<'a> fmt::Write for Writer<'a> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        let bytes = s.bytes();
-
-        self.write_bytes(bytes);
-
-        self.flush();
-
+        self.write_bytes(s.as_bytes());
         Ok(())
     }
 }
@@ -149,8 +142,8 @@ macro_rules! dbg {
 /// Prints to the Xen console with newline and carriage return
 #[macro_export]
 macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+    () => ($crate::print!("\n\r"));
+    ($($arg:tt)*) => ($crate::print!("{}\n\r", format_args!($($arg)*)));
 }
 
 /// Prints to the Xen console
@@ -165,5 +158,12 @@ pub fn _print(args: fmt::Arguments) {
     match *WRITER.lock() {
         Some(ref mut w) => w.write_fmt(format_args!("{}\0", args)).unwrap(),
         None => panic!("WRITER not initialized"),
+    }
+}
+
+fn event_channel_op(cmd: u32, op_ptr: u64) {
+    let rc = unsafe { hypercall!(__HYPERVISOR_event_channel_op, cmd, op_ptr) };
+    if rc != 0 {
+        panic!("event channel op failed with error code: {}", rc);
     }
 }

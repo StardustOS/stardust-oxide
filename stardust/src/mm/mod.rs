@@ -2,12 +2,12 @@
 
 use {
     core::{cmp::min, convert::TryInto, mem::size_of, ptr},
-    util::{
-        init_mfn_list, l1_table_offset, l2_table_offset, l3_table_offset, l4_table_offset, pfn_up,
-        MachineFrameNumber, PageEntry, PageFrameNumber, PhysicalAddress, VirtualAddress,
-    },
     xen::{
         memory::{get_current_pages, get_max_pages, hypervisor_mmu_update},
+        mm::{
+            l1_table_offset, l2_table_offset, l3_table_offset, l4_table_offset, pfn_up,
+            MachineFrameNumber, PageEntry, PageFrameNumber, PhysicalAddress, VirtualAddress,
+        },
         platform::consts::{
             L1_PAGETABLE_ENTRIES, L1_PROT, MAX_MEM_SIZE, PAGETABLE_LEVELS, PAGE_MASK, PAGE_PRESENT,
             PAGE_RW, PAGE_SHIFT, PAGE_SIZE, PT_PROT,
@@ -19,7 +19,6 @@ use {
 };
 
 pub mod allocator;
-pub mod util;
 
 /// Initialise kernel memory management
 pub fn init(start_info: &start_info_t) {
@@ -34,14 +33,6 @@ pub fn init(start_info: &start_info_t) {
     if start_info.mfn_list < end() as u64 {
         panic!("MFN_LIST must be beyond end of program, this can cause corruption!")
     }
-
-    // initialize the mapping between page frame numbers and machine frame numbers
-    init_mfn_list(
-        start_info
-            .mfn_list
-            .try_into()
-            .expect("mfn_list could not be converted to a usize"),
-    );
 
     // construct pointer to base of page table
     let pt_base = start_info.pt_base as *mut PageEntry;
