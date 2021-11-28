@@ -4,4 +4,8 @@
 #include <xen/features.h>
 #include <xen/sched.h>
 #include <xen/xen.h>
+#include <xen/io/netif.h>
+#include <xen/io/ring.h>
 #include <xen/io/console.h>
+#include <xen/io/xenbus.h>
+#include <xen/io/xs_wire.h>
