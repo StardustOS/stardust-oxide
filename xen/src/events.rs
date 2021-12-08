@@ -1,10 +1,13 @@
 //! Interface to Xen event channels
 
-use core::convert::TryInto;
-
-use crate::{
-    platform::util::{synch_clear_bit, synch_set_bit},
-    println, SHARED_INFO,
+use {
+    crate::{
+        hypercall,
+        platform::util::{synch_clear_bit, synch_set_bit},
+        println, SHARED_INFO,
+    },
+    core::convert::TryInto,
+    xen_sys::__HYPERVISOR_event_channel_op,
 };
 
 /// Number of event channel ports
@@ -69,4 +72,12 @@ fn unmask_event_channel(port: usize) {
             &mut (*SHARED_INFO).evtchn_mask[0],
         )
     };
+}
+
+/// Event channel operation hypercall
+pub fn event_channel_op(cmd: u32, op_ptr: u64) {
+    let rc = unsafe { hypercall!(__HYPERVISOR_event_channel_op, cmd, op_ptr) };
+    if rc != 0 {
+        panic!("event channel op failed with error code: {}", rc);
+    }
 }
