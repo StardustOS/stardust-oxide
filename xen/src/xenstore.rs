@@ -59,8 +59,8 @@ pub fn write<K: AsRef<str>, V: AsRef<str>>(key: K, value: V) {
 }
 
 /// Read a key's value from the XenStore
-pub fn read<K: AsRef<str>>(key: K, value: &mut [u8]) {
-    XENSTORE.lock().read(key.as_ref(), value)
+pub fn read<K: AsRef<str>>(key: K) -> String {
+    XENSTORE.lock().read(key.as_ref())
 }
 
 /// List contents of directory
@@ -119,8 +119,10 @@ impl XenStore {
         }
     }
 
-    /// Read a key's value from the XenStore
-    fn read(&mut self, key: &str, value: &mut [u8]) {
+    /// Perform initial steps of a read operation, returning the length of value now ready to be read
+    ///
+    /// The read operation was split like this to allow for building operations requiring reads without allocating (e.g. domain_id)
+    fn read_preamble(&mut self, key: &str) -> usize {
         let msg = &mut xsd_sockmsg {
             type_: xsd_sockmsg_type_XS_READ,
             req_id: self.req_id,
@@ -153,13 +155,24 @@ impl XenStore {
             panic!("XenStore read failed due to unexpected message request ID");
         }
 
-        if value.len() >= msg_len {
-            self.read_response(&mut value[..msg_len]);
-        } else {
-            self.read_response(value);
-            self.ignore(msg_len - value.len());
-            panic!("XenStore read failed due to unexpected message length");
-        }
+        msg_len
+    }
+
+    /// Read a key's value from the XenStore
+    ///
+    /// Requires that the allocator be initialised before calling
+    fn read(&mut self, key: &str) -> String {
+        let msg_len = self.read_preamble(key);
+
+        let mut buf = vec![0; msg_len];
+
+        self.read_response(&mut buf);
+
+        // remove nul terminator
+        buf.truncate(msg_len - 1);
+
+        // does not reallocate
+        String::from_utf8(buf).expect("XenStore value contains invalid UTF-8")
     }
 
     /// List contents of directory
@@ -222,7 +235,8 @@ impl XenStore {
         // fill with newlines so that str::trim removes excess bytes
         let mut buf = [b'\n'; 4];
 
-        self.read("domid\0", &mut buf);
+        let len = self.read_preamble("domid\0");
+        self.read_response(&mut buf[..len]);
 
         // convert slice to str
         str::from_utf8(&buf)
