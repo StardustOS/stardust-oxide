@@ -300,7 +300,7 @@ dependencies = [
 
 [[package]]
 name = "stardust"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "linked_list_allocator",
  "log",
@@ -391,7 +391,7 @@ checksum = "85e60b0d1b5f99db2556934e21937020776a5d31520bf169e851ac44e6420214"
 
 [[package]]
 name = "xen"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "cc",
  "cty",
@@ -403,7 +403,7 @@ dependencies = [
 
 [[package]]
 name = "xen-sys"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "bindgen",
  "cty",
