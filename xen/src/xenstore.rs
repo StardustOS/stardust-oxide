@@ -11,12 +11,14 @@ use {
         mm::{MachineFrameNumber, VirtualAddress},
         START_INFO,
     },
+    alloc::{borrow::ToOwned, string::String, vec, vec::Vec},
     core::{
         convert::{TryFrom, TryInto},
         str,
         sync::atomic::{fence, Ordering},
     },
     lazy_static::lazy_static,
+    log::error,
     spin::Mutex,
     xen_sys::{
         evtchn_port_t, evtchn_send, xenstore_domain_interface, xsd_sockmsg,
@@ -62,8 +64,8 @@ pub fn read<K: AsRef<str>>(key: K, value: &mut [u8]) {
 }
 
 /// List contents of directory
-pub fn ls<K: AsRef<str>>(key: K, value: &mut [u8]) {
-    XENSTORE.lock().ls(key.as_ref(), value)
+pub fn ls<K: AsRef<str>>(key: K) -> Vec<String> {
+    XENSTORE.lock().ls(key.as_ref())
 }
 
 /// Read the current domain's ID
@@ -161,7 +163,7 @@ impl XenStore {
     }
 
     /// List contents of directory
-    fn ls(&mut self, key: &str, value: &mut [u8]) {
+    fn ls(&mut self, key: &str) -> Vec<String> {
         let msg = &mut xsd_sockmsg {
             type_: xsd_sockmsg_type_XS_DIRECTORY,
             req_id: self.req_id,
@@ -194,13 +196,25 @@ impl XenStore {
             panic!("XenStore read failed due to unexpected message request ID");
         }
 
-        if value.len() >= msg_len {
-            self.read_response(&mut value[..msg_len]);
-        } else {
-            self.read_response(value);
-            self.ignore(msg_len - value.len());
-            panic!("XenStore read failed due to unexpected message length");
-        }
+        let mut value = vec![0; msg_len];
+
+        self.read_response(&mut value);
+
+        value
+            .split(|&c| c == 0)
+            .map(|slice| match str::from_utf8(slice) {
+                Ok(str) => str,
+                Err(e) => {
+                    error!(
+                        "XenStore directory contained non UTF-8 key ({:?}), error: {}",
+                        slice, e
+                    );
+                    ""
+                }
+            })
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_owned())
+            .collect()
     }
 
     /// Read the current domain's ID

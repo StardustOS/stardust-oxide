@@ -66,18 +66,14 @@ pub fn launch(start_info: *mut start_info_t) {
         assert_eq!(a.last().unwrap().len(), 20);
     }
 
-    {
-        let mut buf = [0u8; 100];
-        xen::xenstore::ls(
-            format!("/local/domain/{}\0", xen::xenstore::domain_id()),
-            &mut buf,
-        );
-        println!("{:?}", str::from_utf8(&buf).unwrap());
-    }
-
     xen::xenstore::write(
         format!("/local/domain/{}/data\0", xen::xenstore::domain_id()),
         "test!\0",
+    );
+
+    debug!(
+        "local domain contents: {:?}",
+        xen::xenstore::ls(format!("/local/domain/{}\0", xen::xenstore::domain_id()))
     );
 
     unimplemented!("initialisation and idle loop")

@@ -5,10 +5,13 @@
 #![feature(asm)]
 #![deny(missing_docs)]
 
-use core::convert::TryInto;
+extern crate alloc;
 
-use xen_sys::{
-    __HYPERVISOR_update_va_mapping, domid_t, shared_info, start_info, XENFEAT_NR_SUBMAPS,
+use {
+    core::convert::TryInto,
+    xen_sys::{
+        __HYPERVISOR_update_va_mapping, domid_t, shared_info, start_info, XENFEAT_NR_SUBMAPS,
+    },
 };
 
 pub use xen_sys;
