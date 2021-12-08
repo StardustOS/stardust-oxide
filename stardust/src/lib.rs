@@ -66,6 +66,20 @@ pub fn launch(start_info: *mut start_info_t) {
         assert_eq!(a.last().unwrap().len(), 20);
     }
 
+    {
+        let mut buf = [0u8; 100];
+        xen::xenstore::ls(
+            format!("/local/domain/{}\0", xen::xenstore::domain_id()),
+            &mut buf,
+        );
+        println!("{:?}", str::from_utf8(&buf).unwrap());
+    }
+
+    xen::xenstore::write(
+        format!("/local/domain/{}/data\0", xen::xenstore::domain_id()),
+        "test!\0",
+    );
+
     unimplemented!("initialisation and idle loop")
 }
 
@@ -74,7 +88,9 @@ fn print_start_info(start_info: &start_info_t) {
         slice::from_raw_parts(start_info.magic.as_ptr() as *const u8, 32)
     })
     .unwrap();
+
     debug!("   platform: {}", magic_str);
+    debug!("  domain ID: {}", xen::xenstore::domain_id());
     debug!("   nr_pages: {}", start_info.nr_pages);
     debug!("shared_info: {:#X}", start_info.shared_info);
     debug!("    pt_base: {:#X}", start_info.pt_base);

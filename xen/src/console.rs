@@ -2,13 +2,10 @@
 
 use {
     crate::{
-        hypercall,
+        events::event_channel_op,
         mm::{MachineFrameNumber, VirtualAddress},
         scheduler::{schedule_operation, Command},
-        xen_sys::{
-            evtchn_port_t, evtchn_send, xencons_interface, EVTCHNOP_send,
-            __HYPERVISOR_event_channel_op, start_info_t,
-        },
+        xen_sys::{evtchn_port_t, evtchn_send, start_info_t, xencons_interface, EVTCHNOP_send},
     },
     core::{
         convert::TryInto,
@@ -158,12 +155,5 @@ pub fn _print(args: fmt::Arguments) {
     match *WRITER.lock() {
         Some(ref mut w) => w.write_fmt(format_args!("{}\0", args)).unwrap(),
         None => panic!("WRITER not initialized"),
-    }
-}
-
-fn event_channel_op(cmd: u32, op_ptr: u64) {
-    let rc = unsafe { hypercall!(__HYPERVISOR_event_channel_op, cmd, op_ptr) };
-    if rc != 0 {
-        panic!("event channel op failed with error code: {}", rc);
     }
 }

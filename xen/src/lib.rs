@@ -22,6 +22,7 @@ pub mod platform;
 pub mod scheduler;
 pub mod sections;
 pub mod trap;
+pub mod xenstore;
 
 /// Domain ID of this domain
 pub const DOMID_SELF: domid_t = 0x7FF0;
