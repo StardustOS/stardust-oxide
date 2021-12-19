@@ -1,6 +1,6 @@
 //! x86_64 hypercall functions
 
-use cty::c_long;
+use {core::arch::asm, cty::c_long};
 
 #[repr(C)]
 struct HypercallEntry([u8; 32]);
