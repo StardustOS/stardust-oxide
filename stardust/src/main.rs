@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![test_runner(crate::test_runner)]
 
 use xen::xen_sys::start_info_t;
 

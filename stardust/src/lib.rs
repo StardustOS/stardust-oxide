@@ -1,15 +1,18 @@
 //! Stardust Oxide
 
 #![no_std]
-#![feature(alloc_error_handler)]
 #![deny(missing_docs)]
+#![feature(alloc_error_handler)]
+#![feature(custom_test_frameworks)]
+
+#![reexport_test_harness_main = "test_main"]
 
 extern crate alloc;
 
 use {
     alloc::{format, vec::Vec},
     core::{slice, str},
-    log::{debug, error},
+    log::{debug, error, info},
     xen::{
         console::Writer,
         init_info, println,
@@ -45,6 +48,9 @@ pub fn launch(start_info: *mut start_info_t) {
 
     trap::init();
     mm::init(start_info);
+
+    #[cfg(test)]
+    test_main();
 
     {
         let mut a = Vec::with_capacity(30_000_000);
@@ -120,4 +126,12 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     schedule_operation(Command::Shutdown(ShutdownReason::Crash));
 
     loop {}
+}
+
+#[cfg(test)]
+fn test_runner(tests: &[&dyn Fn()]) {
+    info!("Running {} tests", tests.len());
+    for test in tests {
+        test();
+    }
 }
