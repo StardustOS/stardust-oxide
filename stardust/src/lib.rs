@@ -8,7 +8,8 @@ extern crate alloc;
 
 use {
     core::{slice, str},
-    log::{debug, error},
+    executor::Executor,
+    log::{debug, error, info},
     xen::{
         console::Writer,
         init_info, println,
@@ -18,9 +19,10 @@ use {
     },
 };
 
-pub mod logger;
-pub mod mm;
-pub mod trap;
+mod executor;
+mod logger;
+mod mm;
+mod trap;
 
 #[cfg(feature = "test")]
 mod test;
@@ -51,7 +53,22 @@ pub fn launch(start_info: *mut start_info_t) {
     #[cfg(feature = "test")]
     test::tests();
 
-    unimplemented!("initialisation and idle loop")
+    let mut executor = Executor::new();
+    executor.spawn(example_task_a());
+    executor.spawn(example_task_b());
+    executor.run();
+
+    // if run() terminates then all tasks have completed, exit cleanly
+    Writer::flush();
+    schedule_operation(Command::Shutdown(ShutdownReason::Poweroff));
+}
+
+async fn example_task_a() {
+    info!("hello from task a!");
+}
+
+async fn example_task_b() {
+    info!("hello from task b!");
 }
 
 fn print_start_info(start_info: &start_info_t) {
