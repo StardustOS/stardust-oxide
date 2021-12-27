@@ -7,3 +7,7 @@ edition = "2018"
 xen = { path = "../xen" }
 linked_list_allocator = "0.9"
 log = { version = "0.4", features = ["release_max_level_trace"] }
+
+[features]
+# this is a really horrible solution to `custom_task_framework` not working
+test = []
