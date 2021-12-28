@@ -7,14 +7,12 @@
 extern crate alloc;
 
 use {
-    core::{slice, str},
-    executor::Executor,
+    core::{slice, str, time::Duration},
+    executor::{Delay, Executor},
     log::{debug, error, info},
     xen::{
         console::Writer,
-        init_info,
-        platform::time::get_system_time,
-        println,
+        init_info, println,
         scheduler::{schedule_operation, Command, ShutdownReason},
         sections::{edata, end, erodata, etext, text_start},
         xen_sys::start_info_t,
@@ -65,14 +63,20 @@ pub fn launch(start_info: *mut start_info_t) {
     schedule_operation(Command::Shutdown(ShutdownReason::Poweroff));
 }
 
+// prints every 5 seconds
 async fn example_task_a() {
     loop {
-        info!("hello from task a!, {}", get_system_time());
+        info!("hello from task a!");
+        Delay::new(Duration::new(5, 0)).await;
     }
 }
 
+// prints every second
 async fn example_task_b() {
-    info!("hello from task b!, {}", get_system_time());
+    loop {
+        info!("hello from task b!");
+        Delay::new(Duration::new(1, 0)).await;
+    }
 }
 
 fn print_start_info(start_info: &start_info_t) {
