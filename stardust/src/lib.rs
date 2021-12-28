@@ -12,7 +12,9 @@ use {
     log::{debug, error, info},
     xen::{
         console::Writer,
-        init_info, println,
+        init_info,
+        platform::time::get_system_time,
+        println,
         scheduler::{schedule_operation, Command, ShutdownReason},
         sections::{edata, end, erodata, etext, text_start},
         xen_sys::start_info_t,
@@ -64,11 +66,13 @@ pub fn launch(start_info: *mut start_info_t) {
 }
 
 async fn example_task_a() {
-    info!("hello from task a!");
+    loop {
+        info!("hello from task a!, {}", get_system_time());
+    }
 }
 
 async fn example_task_b() {
-    info!("hello from task b!");
+    info!("hello from task b!, {}", get_system_time());
 }
 
 fn print_start_info(start_info: &start_info_t) {
