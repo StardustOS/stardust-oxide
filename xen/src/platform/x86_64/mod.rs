@@ -2,4 +2,5 @@
 
 pub mod consts;
 pub mod hypercall;
+pub mod time;
 pub mod util;
