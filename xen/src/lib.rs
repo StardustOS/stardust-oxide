@@ -17,6 +17,7 @@ pub use xen_sys;
 
 pub mod console;
 pub mod events;
+pub mod grant_table;
 pub mod hypercall;
 pub mod memory;
 pub mod mm;

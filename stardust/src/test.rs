@@ -1,10 +1,10 @@
 use {
     alloc::{format, vec::Vec},
     log::{debug, error},
-    xen::xenstore,
+    xen::{grant_table, xenstore},
 };
 
-const TESTS: [&dyn Fn(); 2] = [&allocator, &xenstore];
+const TESTS: [&dyn Fn(); 3] = [&allocator, &xenstore, &grant_table];
 
 pub fn tests() {
     error!("RUNNING {} TESTS", TESTS.len());
@@ -54,4 +54,11 @@ fn xenstore() {
         "test: {:?}",
         xenstore::read(format!("/local/domain/{}/data\0", xenstore::domain_id()))
     );
+}
+
+fn grant_table() {
+    debug!(
+        "grant table query size: {:?}",
+        grant_table::operations::query_size().unwrap()
+    )
 }
