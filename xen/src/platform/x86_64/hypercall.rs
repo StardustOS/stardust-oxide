@@ -1,6 +1,10 @@
 //! x86_64 hypercall functions
 
-use {core::arch::asm, cty::c_long};
+use {
+    crate::hypercall::{errno_to_result, Error},
+    core::{arch::asm, result::Result},
+    cty::c_long,
+};
 
 #[repr(C)]
 struct HypercallEntry([u8; 32]);
@@ -14,7 +18,7 @@ extern "C" {
 /// # Safety
 ///
 /// `offset` must be a valid offset into `hypercall_page`
-pub unsafe fn hypercall0(offset: u32) -> c_long {
+pub unsafe fn hypercall0(offset: u32) -> Result<u64, Error> {
     let mut res: c_long;
     let entry = hypercall_page.as_ptr().offset(offset as isize);
 
@@ -28,7 +32,7 @@ pub unsafe fn hypercall0(offset: u32) -> c_long {
     out("xmm8") _, out("xmm9") _, out("xmm10") _, out("xmm11") _,
     out("xmm12") _, out("xmm13") _, out("xmm14") _, out("xmm15") _);
 
-    res
+    errno_to_result(res)
 }
 
 /// Makes hypercall with 1 argument
@@ -36,7 +40,7 @@ pub unsafe fn hypercall0(offset: u32) -> c_long {
 /// # Safety
 ///
 /// `offset` must be a valid offset into `hypercall_page`
-pub unsafe fn hypercall1(offset: u32, arg0: u64) -> c_long {
+pub unsafe fn hypercall1(offset: u32, arg0: u64) -> Result<u64, Error> {
     let mut res: c_long;
     let entry = hypercall_page.as_ptr().offset(offset as isize);
 
@@ -52,7 +56,7 @@ pub unsafe fn hypercall1(offset: u32, arg0: u64) -> c_long {
     out("xmm8") _, out("xmm9") _, out("xmm10") _, out("xmm11") _,
     out("xmm12") _, out("xmm13") _, out("xmm14") _, out("xmm15") _);
 
-    res
+    errno_to_result(res)
 }
 
 /// Makes hypercall with 2 arguments
@@ -60,7 +64,7 @@ pub unsafe fn hypercall1(offset: u32, arg0: u64) -> c_long {
 /// # Safety
 ///
 /// `offset` must be a valid offset into `hypercall_page`
-pub unsafe fn hypercall2(offset: u32, arg0: u64, arg1: u64) -> c_long {
+pub unsafe fn hypercall2(offset: u32, arg0: u64, arg1: u64) -> Result<u64, Error> {
     let mut res: c_long;
     let entry = hypercall_page.as_ptr().offset(offset as isize);
 
@@ -77,7 +81,7 @@ pub unsafe fn hypercall2(offset: u32, arg0: u64, arg1: u64) -> c_long {
     out("xmm8") _, out("xmm9") _, out("xmm10") _, out("xmm11") _,
     out("xmm12") _, out("xmm13") _, out("xmm14") _, out("xmm15") _);
 
-    res
+    errno_to_result(res)
 }
 
 /// Makes hypercall with 3 arguments
@@ -85,7 +89,7 @@ pub unsafe fn hypercall2(offset: u32, arg0: u64, arg1: u64) -> c_long {
 /// # Safety
 ///
 /// `offset` must be a valid offset into `hypercall_page`
-pub unsafe fn hypercall3(offset: u32, arg0: u64, arg1: u64, arg2: u64) -> c_long {
+pub unsafe fn hypercall3(offset: u32, arg0: u64, arg1: u64, arg2: u64) -> Result<u64, Error> {
     let mut res: c_long;
     let entry = hypercall_page.as_ptr().offset(offset as isize);
 
@@ -103,7 +107,7 @@ pub unsafe fn hypercall3(offset: u32, arg0: u64, arg1: u64, arg2: u64) -> c_long
     out("xmm8") _, out("xmm9") _, out("xmm10") _, out("xmm11") _,
     out("xmm12") _, out("xmm13") _, out("xmm14") _, out("xmm15") _);
 
-    res
+    errno_to_result(res)
 }
 
 /// Makes hypercall with 4 arguments
@@ -111,7 +115,13 @@ pub unsafe fn hypercall3(offset: u32, arg0: u64, arg1: u64, arg2: u64) -> c_long
 /// # Safety
 ///
 /// `offset` must be a valid offset into `hypercall_page`
-pub unsafe fn hypercall4(offset: u32, arg0: u64, arg1: u64, arg2: u64, arg3: u64) -> c_long {
+pub unsafe fn hypercall4(
+    offset: u32,
+    arg0: u64,
+    arg1: u64,
+    arg2: u64,
+    arg3: u64,
+) -> Result<u64, Error> {
     let mut res: c_long;
     let entry = hypercall_page.as_ptr().offset(offset as isize);
 
@@ -130,7 +140,7 @@ pub unsafe fn hypercall4(offset: u32, arg0: u64, arg1: u64, arg2: u64, arg3: u64
     out("xmm8") _, out("xmm9") _, out("xmm10") _, out("xmm11") _,
     out("xmm12") _, out("xmm13") _, out("xmm14") _, out("xmm15") _);
 
-    res
+    errno_to_result(res)
 }
 
 /// Makes hypercall with 5 arguments
@@ -145,7 +155,7 @@ pub unsafe fn hypercall5(
     arg2: u64,
     arg3: u64,
     arg4: u64,
-) -> c_long {
+) -> Result<u64, Error> {
     let mut res: c_long;
     let entry = hypercall_page.as_ptr().offset(offset as isize);
 
@@ -165,5 +175,5 @@ pub unsafe fn hypercall5(
     out("xmm8") _, out("xmm9") _, out("xmm10") _, out("xmm11") _,
     out("xmm12") _, out("xmm13") _, out("xmm14") _, out("xmm15") _);
 
-    res
+    errno_to_result(res)
 }
