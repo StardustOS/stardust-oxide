@@ -24,6 +24,9 @@ jobs:
           toolchain: nightly
           components: rust-src
 
+      - name: Cache artifacts
+        uses: Swatinem/rust-cache@v1
+
       - name: Build Documentation
         run: cargo doc --all
 
