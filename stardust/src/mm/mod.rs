@@ -52,8 +52,14 @@ pub fn init(start_info: &start_info_t) {
     debug!("             start_pfn: {:?}", start_pfn.0);
     debug!("               max_pfn: {:?}", max_pfn.0);
 
-    debug!("current reserved pages: {}", get_current_pages());
-    debug!("    max reserved pages: {}", get_max_pages());
+    debug!(
+        "current reserved pages: {}",
+        get_current_pages().expect("Failed to get current reserved pages")
+    );
+    debug!(
+        "    max reserved pages: {}",
+        get_max_pages().expect("Failed to get max reserved pages")
+    );
 
     let (start_address, size) = unsafe { build_pagetable(pt_base, start_pfn, max_pfn) };
 
@@ -169,10 +175,9 @@ unsafe fn build_pagetable(
             || (mmu_updates_index != 0 && pfn_to_map == max_pfn)
         // issue MMU update hypercall
         {
-            let rc = hypervisor_mmu_update(&mmu_updates[..mmu_updates_index]);
-            if rc < 0 {
-                panic!("PTE could not be updated, mmu_update failed with rc={}", rc);
-            }
+            hypervisor_mmu_update(&mmu_updates[..mmu_updates_index])
+                .expect("PTE could not be updated");
+
             mmu_updates_index = 0;
         }
     }
@@ -222,21 +227,12 @@ unsafe fn new_pt_frame(
     mmu_updates[0].val = ((MachineFrameNumber::from(pt_pfn).0 << PAGE_SHIFT)
         | (PT_PROT[level - 1] & !PAGE_RW)) as u64;
 
-    let rc = hypervisor_mmu_update(&mmu_updates);
-    if rc < 0 {
-        panic!(
-            "PTE for new page table page could not be updated, mmu_update failed with rc={}",
-            rc
-        );
-    }
+    hypervisor_mmu_update(&mmu_updates).expect("PTE for new page table page could not be updated");
 
     // Hook the new page table page into the hierarchy
     mmu_updates[0].ptr =
         ((prev_l_mfn.0 << PAGE_SHIFT) + size_of::<PageEntry>() * offset as usize) as u64;
     mmu_updates[0].val = (MachineFrameNumber::from(pt_pfn).0 << PAGE_SHIFT | PT_PROT[level]) as u64;
 
-    let rc = hypervisor_mmu_update(&mmu_updates);
-    if rc < 0 {
-        panic!("mmu_update failed with rc={}", rc);
-    }
+    hypervisor_mmu_update(&mmu_updates).expect("PTE insertion into hierarchy failed");
 }

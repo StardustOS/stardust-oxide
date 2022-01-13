@@ -19,6 +19,7 @@ pub struct TrapInfo {
 unsafe impl Sync for TrapInfo {}
 
 /// Registers a trap handler table
-pub fn set_trap_table(table: &'static [TrapInfo]) -> i64 {
+pub fn set_trap_table(table: &'static [TrapInfo]) {
     unsafe { hypercall!(__HYPERVISOR_set_trap_table, table.as_ptr() as u64) }
+        .expect("Failed to set trap table");
 }

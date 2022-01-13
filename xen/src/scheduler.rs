@@ -96,8 +96,8 @@ pub enum ShutdownReason {
     Watchdog = SHUTDOWN_watchdog as isize,
 }
 
-unsafe fn sched_op(cmd: u32, arg: u64) -> i64 {
-    hypercall!(__HYPERVISOR_sched_op, cmd, arg)
+unsafe fn sched_op(cmd: u32, arg: u64) {
+    hypercall!(__HYPERVISOR_sched_op, cmd, arg).expect("Failed schedule operation");
 }
 
 ///

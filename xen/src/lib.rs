@@ -50,16 +50,13 @@ pub fn init_info(start_info: *mut start_info) {
             .expect("Failed to convert u64 to usize"),
     );
 
-    let rc = unsafe {
+    unsafe {
         hypercall!(
             __HYPERVISOR_update_va_mapping,
             SHARED_INFO as u64,
             (*START_INFO).shared_info | 7,
             2u64
         )
-    };
-
-    if rc != 0 {
-        panic!("Failed to map shared info page with error: {}", rc);
     }
+    .expect("Failed to map shared info page");
 }
