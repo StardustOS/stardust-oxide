@@ -13,7 +13,7 @@ jobs:
       - name: Install Xen
         run: |
           sudo apt update
-          sudo apt install -y xen-hypervisor-common xen-system-amd64 xen-tools xen-utils-common xenstore-utils libxen-dev
+          sudo apt install -y libxen-dev
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
