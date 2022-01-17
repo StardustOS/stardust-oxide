@@ -15,22 +15,28 @@ pub fn tests() {
 
 fn allocator() {
     {
-        let mut a = Vec::with_capacity(30_000_000);
-        for i in 0..30_000_000 {
+        let size = 15_000_000;
+        let mut a = Vec::with_capacity(size);
+        for i in 0..size {
             a.push((i % 256) as u8);
         }
-        for i in (0..30_000_000).rev() {
+        for i in (0..size).rev() {
             assert_eq!(a.pop().unwrap(), (i % 256) as u8);
         }
         assert_eq!(a.len(), 0);
+        debug!("{:?}", crate::mm::allocator::ALLOCATOR.lock());
     }
 
-    let mut a = Vec::with_capacity(500_000);
-    for i in 0..500_000 {
-        let str = format!("string number {}", i);
-        a.push(str);
+    {
+        let size = 500_000;
+        let mut a = Vec::with_capacity(size);
+        for i in 0..size {
+            let str = format!("string number {}", i);
+            a.push(str);
+        }
+        assert_eq!(a.last().unwrap().len(), 20);
+        debug!("{:?}", crate::mm::allocator::ALLOCATOR.lock());
     }
-    assert_eq!(a.last().unwrap().len(), 20);
 }
 
 fn xenstore() {

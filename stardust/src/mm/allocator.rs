@@ -1,9 +1,13 @@
 //! Kernel memory allocator
 
-use {linked_list_allocator::LockedHeap, log::info, xen::mm::VirtualAddress};
+use {
+    buddy_system_allocator::LockedHeap,
+    log::{error, info},
+    xen::mm::VirtualAddress,
+};
 
 #[global_allocator]
-static ALLOCATOR: LockedHeap = LockedHeap::empty();
+pub static ALLOCATOR: LockedHeap<32> = LockedHeap::empty();
 
 /// Initialize allocator
 pub unsafe fn init(heap_start: VirtualAddress, heap_size: usize) {
@@ -17,5 +21,6 @@ pub unsafe fn init(heap_start: VirtualAddress, heap_size: usize) {
 
 #[alloc_error_handler]
 fn alloc_error_handler(layout: alloc::alloc::Layout) -> ! {
-    panic!("allocation error: {:?}", layout)
+    error!("ALLOCATOR: {:?}", ALLOCATOR.lock());
+    panic!("allocation error: {:?}", layout);
 }
