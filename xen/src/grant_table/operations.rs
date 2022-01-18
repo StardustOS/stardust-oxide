@@ -1,39 +1,110 @@
-//!
+//! Safe grant table operation wrappers
+
+use core::convert::TryInto;
 
 use {
-    crate::{hypercall, DOMID_SELF},
+    crate::{
+        grant_table::{Error, GrantStatusError},
+        hypercall, DOMID_SELF,
+    },
     xen_sys::{
-        GNTTABOP_copy, GNTTABOP_dump_table, GNTTABOP_map_grant_ref, GNTTABOP_query_size,
-        GNTTABOP_setup_table, GNTTABOP_transfer, GNTTABOP_unmap_and_replace,
-        GNTTABOP_unmap_grant_ref, __HYPERVISOR_grant_table_op, domid_t, gnttab_dump_table_t,
-        gnttab_query_size_t, gnttab_setup_table_t, grant_ref_t,
+        GNTTABOP_dump_table, GNTTABOP_map_grant_ref, GNTTABOP_query_size,
+        __HYPERVISOR_grant_table_op, domid_t, gnttab_dump_table_t, gnttab_map_grant_ref_t,
+        gnttab_query_size_t, gnttab_setup_table_t, gnttab_unmap_grant_ref_t, GNTMAP_host_map,
+        GNTMAP_readonly, GNTTABOP_setup_table, GNTTABOP_unmap_grant_ref,
     },
 };
 
-/// Grant entry consisting of a domain-grant reference pair
-pub struct GrantEntry {
-    ///
-    domain: domid_t,
-    reference: grant_ref_t,
+/// Handle to track a mapping created via a grant reference
+///
+/// Fields are private so that a handle cannot be constructed other than by `map_grant_entry`.
+pub struct GrantHandle {
+    host_addr: u64,
+    handle: u32,
+}
+
+impl GrantHandle {
+    /// Unmaps the mapped grant reference
+    pub fn unmap(&self) -> Result<(), Error> {
+        let mut arg = gnttab_unmap_grant_ref_t {
+            // INPUT
+            host_addr: self.host_addr,
+            dev_bus_addr: 0,
+            handle: self.handle,
+            // OUTPUT
+            status: 0,
+        };
+
+        unsafe { grant_table_op(GNTTABOP_unmap_grant_ref, &mut arg as *mut _ as u64)? };
+
+        if arg.status != 0 {
+            return Err(GrantStatusError::from(arg.status).into());
+        }
+
+        Ok(())
+    }
 }
 
 /// Maps grant entry
-pub fn map_grant_entry() {
-    unimplemented!()
-}
+pub unsafe fn map_grant_entry(
+    address: *const u8,
+    reference: u32,
+    domain: domid_t,
+    readonly: bool,
+) -> Result<GrantHandle, Error> {
+    let mut arg = gnttab_map_grant_ref_t {
+        // INPUT
+        host_addr: address as u64,
+        flags: GNTMAP_host_map,
+        ref_: reference,
+        dom: domain,
+        // OUTPUT
+        status: 0,
+        handle: 0,
+        dev_bus_addr: 0,
+    };
 
-/// Unmaps grant entry
-pub fn unmap_grant_entry() {
-    unimplemented!()
+    if readonly {
+        arg.flags |= GNTMAP_readonly;
+    }
+
+    grant_table_op(GNTTABOP_map_grant_ref, &mut arg as *mut _ as u64)?;
+
+    if arg.status != 0 {
+        return Err(GrantStatusError::from(arg.status).into());
+    }
+
+    Ok(GrantHandle {
+        host_addr: arg.host_addr,
+        handle: arg.handle,
+    })
 }
 
 /// Sets up grant table
-pub fn setup_table() {
-    unimplemented!()
+pub fn setup_table(domain: domid_t, frames: &mut [u64]) -> Result<(), Error> {
+    let mut arg = gnttab_setup_table_t {
+        // INPUT
+        dom: domain,
+        nr_frames: frames
+            .len()
+            .try_into()
+            .expect("Failed to convert usize to u32"),
+        frame_list: frames.as_mut_ptr(),
+        // OUTPUT
+        status: 0,
+    };
+
+    unsafe { grant_table_op(GNTTABOP_setup_table, &mut arg as *mut _ as u64)? };
+
+    if arg.status != 0 {
+        return Err(GrantStatusError::from(arg.status).into());
+    }
+
+    Ok(())
 }
 
 /// Dumps contents of grant table to console
-pub fn dump_table() -> Result<(), hypercall::Error> {
+pub fn dump_table() -> Result<(), Error> {
     let mut arg = gnttab_dump_table_t {
         // INPUT
         dom: DOMID_SELF,
@@ -57,7 +128,7 @@ pub fn copy() {
 }
 
 /// Queries the current and maximum sizes of the shared grant table
-pub fn query_size() -> Result<(u32, u32), hypercall::Error> {
+pub fn query_size() -> Result<(u32, u32), Error> {
     let mut arg = gnttab_query_size_t {
         dom: DOMID_SELF,
         nr_frames: 0,
