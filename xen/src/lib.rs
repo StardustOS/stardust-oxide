@@ -20,7 +20,6 @@ pub mod events;
 pub mod grant_table;
 pub mod hypercall;
 pub mod memory;
-pub mod mm;
 pub mod platform;
 pub mod scheduler;
 pub mod sections;
@@ -45,7 +44,7 @@ pub static mut SHARED_INFO: *mut shared_info = core::ptr::null_mut();
 pub fn init_info(start_info: *mut start_info) {
     unsafe { START_INFO = start_info };
 
-    mm::init_mfn_list(
+    memory::init_mfn_list(
         unsafe { *START_INFO }
             .mfn_list
             .try_into()

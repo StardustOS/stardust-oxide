@@ -8,7 +8,7 @@
 use {
     crate::{
         events::event_channel_op,
-        mm::{MachineFrameNumber, VirtualAddress},
+        memory::{MachineFrameNumber, VirtualAddress},
         START_INFO,
     },
     alloc::{borrow::ToOwned, string::String, vec, vec::Vec},

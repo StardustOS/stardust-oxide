@@ -4,10 +4,10 @@ use {
     core::{cmp::min, convert::TryInto, mem::size_of, ptr},
     log::{debug, info, trace},
     xen::{
-        memory::{get_current_pages, get_max_pages, hypervisor_mmu_update},
-        mm::{
-            l1_table_offset, l2_table_offset, l3_table_offset, l4_table_offset, pfn_up,
-            MachineFrameNumber, PageEntry, PageFrameNumber, PhysicalAddress, VirtualAddress,
+        memory::{
+            get_current_pages, get_max_pages, hypervisor_mmu_update, l1_table_offset,
+            l2_table_offset, l3_table_offset, l4_table_offset, pfn_up, MachineFrameNumber,
+            PageEntry, PageFrameNumber, PhysicalAddress, VirtualAddress,
         },
         platform::consts::{
             L1_PAGETABLE_ENTRIES, L1_PROT, MAX_MEM_SIZE, PAGETABLE_LEVELS, PAGE_MASK, PAGE_PRESENT,

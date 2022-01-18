@@ -3,7 +3,7 @@
 use {
     crate::{
         events::event_channel_op,
-        mm::{MachineFrameNumber, VirtualAddress},
+        memory::{MachineFrameNumber, VirtualAddress},
         scheduler::{schedule_operation, Command},
         xen_sys::{evtchn_port_t, evtchn_send, start_info_t, xencons_interface, EVTCHNOP_send},
     },
