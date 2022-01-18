@@ -1,59 +1,55 @@
 //! Memory management utilities and balloon driver
 
-use core::convert::TryInto;
-
 use {
-    crate::{hypercall, DOMID_SELF},
+    crate::{hypercall, mm::MachineFrameNumber, DOMID_SELF},
+    core::convert::TryInto,
     log::warn,
-    xen_sys::{__HYPERVISOR_memory_op, __HYPERVISOR_mmu_update, domid_t, mmu_update_t},
+    xen_sys::{__HYPERVISOR_memory_op, __HYPERVISOR_mmu_update, mmu_update_t},
 };
 
 /// Memory operation commands
-pub enum Command {
+enum Command {
+    /// Returns the maximum machine frame number of mapped RAM in this system
+    MaximumRamPage = 2,
     /// Returns the current memory reservation in pages of the specified domain
-    CurrentReservation {
-        /// Domain ID
-        domain: domid_t,
-    },
+    CurrentReservation = 3,
     /// Returns the maximum memory reservation in pages of the specified domain
-    MaximumReservation {
-        /// Domain ID
-        domain: domid_t,
-    },
-}
-
-impl Command {
-    fn value(&self) -> u32 {
-        match self {
-            Command::CurrentReservation { .. } => 3,
-            Command::MaximumReservation { .. } => 4,
-        }
-    }
+    MaximumReservation = 4,
 }
 
 /// Perform memory operation
-pub fn memory_op(cmd: Command) -> Result<u64, hypercall::Error> {
-    match cmd {
-        Command::CurrentReservation { domain } | Command::MaximumReservation { domain } => unsafe {
-            hypercall!(
-                __HYPERVISOR_memory_op,
-                cmd.value(),
-                (&domain) as *const domid_t as u64
-            )
-        },
-    }
+unsafe fn memory_op(cmd: Command, arg: u64) -> Result<u64, hypercall::Error> {
+    hypercall!(__HYPERVISOR_memory_op, cmd as u64, arg)
 }
 
-/// Get the current number of reserved pages for the current domain
+/// Gets the current number of reserved pages for the current domain
 pub fn get_current_pages() -> Result<usize, hypercall::Error> {
-    memory_op(Command::CurrentReservation { domain: DOMID_SELF })
-        .map(|n| n.try_into().expect("Failed to convert u64 to usize"))
+    unsafe {
+        memory_op(
+            Command::CurrentReservation,
+            (&DOMID_SELF) as *const _ as u64,
+        )
+    }
+    .map(|n| n.try_into().expect("Failed to convert u64 to usize"))
 }
 
-/// Get the maximum number of reserved pages for the current domain
+/// Gets the maximum number of reserved pages for the current domain
 pub fn get_max_pages() -> Result<usize, hypercall::Error> {
-    memory_op(Command::MaximumReservation { domain: DOMID_SELF })
-        .map(|n| n.try_into().expect("Failed to convert u64 to usize"))
+    unsafe {
+        memory_op(
+            Command::MaximumReservation,
+            (&DOMID_SELF) as *const _ as u64,
+        )
+    }
+    .map(|n| n.try_into().expect("Failed to convert u64 to usize"))
+}
+
+/// Gets the maximum machine frame number of mapped RAM in this system
+pub fn get_max_machine_frame_number() -> MachineFrameNumber {
+    let mfn = unsafe { memory_op(Command::MaximumRamPage, 0) }
+        .expect("maximum_ram_page memory operation can never fail");
+
+    MachineFrameNumber(mfn.try_into().expect("Failed to convert u64 to usize"))
 }
 
 /// Updates an entry in a page table

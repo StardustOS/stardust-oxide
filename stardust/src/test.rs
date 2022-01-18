@@ -1,7 +1,7 @@
 use {
     alloc::{format, vec::Vec},
     log::{debug, error},
-    xen::{grant_table, xenstore},
+    xen::{grant_table, memory, xenstore},
 };
 
 const TESTS: [&dyn Fn(); 3] = [&allocator, &xenstore, &grant_table];
@@ -60,5 +60,7 @@ fn grant_table() {
     debug!(
         "grant table query size: {:?}",
         grant_table::operations::query_size().unwrap()
-    )
+    );
+
+    debug!("max page: {:?}", memory::get_max_machine_frame_number());
 }
