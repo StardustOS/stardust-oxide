@@ -1,6 +1,5 @@
 use {
     core::{
-        convert::TryFrom,
         future::Future,
         pin::Pin,
         task::{Context, Poll},
@@ -19,13 +18,12 @@ pub struct Delay {
 }
 
 impl Delay {
+    /// Creates a new future that will await for the supplied duration
+    ///
+    /// Supplied duration in nanoseconds must be less than 584.6 years.
     pub fn new(duration: Duration) -> Self {
-        let expiration_timestamp = get_system_time()
-            + u64::try_from(duration.as_nanos())
-                .expect("Supplied Duriation in nanoseconds cannot be converted to u64");
-
         Self {
-            expiration_timestamp,
+            expiration_timestamp: get_system_time() + (duration.as_nanos() as u64),
         }
     }
 }
