@@ -29,8 +29,4 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Build
-        run: cargo build
-
-      # Disabled until a method for running Xen in GitHub Actions is found
-      #- name: Run
-      #  run: cargo run
+        run: cargo build --release
