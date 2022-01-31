@@ -2,79 +2,136 @@
 //!
 //! "The grant table mechanism [..] allows memory pages to be transferred or shared between virtual machines"
 
-use {crate::hypercall, displaydoc::Display};
+use {
+    crate::platform::{self, consts::PAGE_SIZE},
+    core::{
+        convert::{TryFrom, TryInto},
+        mem::size_of,
+        sync::atomic::{fence, Ordering},
+    },
+    lazy_static::lazy_static,
+    spin::Mutex,
+    xen_sys::{grant_entry_t, grant_ref_t, GTF_accept_transfer, GTF_permit_access, GTF_readonly},
+};
 
+pub use error::{Error, GrantStatusError};
+use xen_sys::domid_t;
+
+use crate::memory::MachineFrameNumber;
+
+mod error;
 pub mod operations;
 
-/// Grant table error
-#[derive(Display, Debug)]
-pub enum Error {
-    /// Error from the hypercall in a grant table operation
-    Hypercall(hypercall::Error),
-    /// Error returned in status field of operation argument
-    Operation(GrantStatusError),
+/// Number of grant frames
+const NUM_GRANT_FRAMES: usize = 4;
+
+const NUM_RESERVED_ENTRIES: usize = 8;
+
+const NUM_GRANT_ENTRIES: usize = (NUM_GRANT_FRAMES * PAGE_SIZE) / size_of::<grant_entry_t>();
+
+lazy_static! {
+    static ref GRANT_TABLE: Mutex<GrantTable> = Mutex::new(GrantTable::new());
 }
 
-impl From<hypercall::Error> for Error {
-    fn from(e: hypercall::Error) -> Self {
-        Self::Hypercall(e)
-    }
+// Required due to the raw mutable pointer to the grant table not being Send, this is safe as the virtual address it refers to is constant for the lifetime of the GrantTable
+unsafe impl Send for GrantTable {}
+
+#[derive(Debug)]
+struct GrantTable {
+    list: [grant_ref_t; NUM_GRANT_ENTRIES],
+    table: *mut grant_entry_t,
 }
 
-impl From<GrantStatusError> for Error {
-    fn from(e: GrantStatusError) -> Self {
-        Self::Operation(e)
-    }
-}
+impl GrantTable {
+    fn new() -> Self {
+        let list = [0; NUM_GRANT_ENTRIES];
 
-/// Errors returned in the status field of grant table operation argument structs
-#[derive(Debug, Display)]
-pub enum GrantStatusError {
-    /// General undefined error.
-    GeneralError,
-    /// Unrecognsed domain id.
-    BadDomain,
-    /// Unrecognised or inappropriate gntref.
-    BadGntRef,
-    /// Unrecognised or inappropriate handle.
-    BadHandle,
-    /// Inappropriate virtual address to map.
-    BadVirtAddr,
-    /// Inappropriate device address to unmap.
-    BadDevAddr,
-    /// Out of space in I/O MMU.
-    NoDeviceSpace,
-    /// Not enough privilege for operation.
-    PermissionDenied,
-    /// Specified page was invalid for op.
-    BadPage,
-    /// copy arguments cross page boundary.
-    BadCopyArg,
-    /// transfer page address too large.
-    AddressTooBig,
-    /// Operation not done; try again.
-    Eagain,
-    /// Out of space (handles etc).
-    NoSpace,
-}
+        let table = platform::grant_table::init::<NUM_GRANT_FRAMES>()
+            .expect("Failed platform grant table initialization");
 
-impl From<i16> for GrantStatusError {
-    fn from(status: i16) -> Self {
-        match status {
-            -1 => Self::GeneralError,
-            -2 => Self::BadDomain,
-            -3 => Self::BadGntRef,
-            -4 => Self::BadHandle,
-            -5 => Self::BadVirtAddr,
-            -6 => Self::BadDevAddr,
-            -7 => Self::NoDeviceSpace,
-            -8 => Self::PermissionDenied,
-            -9 => Self::BadPage,
-            -10 => Self::BadCopyArg,
-            -11 => Self::AddressTooBig,
-            -12 => Self::Eagain,
-            -13 => Self::NoSpace,
-            _ => panic!("unknown status"),
+        let mut celf = Self { list, table };
+
+        for i in NUM_RESERVED_ENTRIES..NUM_GRANT_ENTRIES {
+            celf.put_free_entry(i);
         }
+
+        celf
     }
+
+    fn put_free_entry(&mut self, reference: usize) {
+        self.list[reference] = self.list[0];
+        self.list[0] = reference
+            .try_into()
+            .expect("Failed to convert usize to grant_ref_t");
+    }
+
+    fn get_free_entry(&mut self) -> grant_ref_t {
+        let reference = self.list[0];
+        self.list[0] =
+            self.list[usize::try_from(reference).expect("Failed to convert u32 to usize")];
+        reference
+    }
+
+    fn grant_access(
+        &mut self,
+        domain: domid_t,
+        frame: MachineFrameNumber,
+        readonly: bool,
+    ) -> grant_ref_t {
+        let reference = self.get_free_entry();
+        let idx: isize = reference
+            .try_into()
+            .expect("Failed to convert u32 to usize");
+
+        unsafe {
+            let mut entry = *(self.table.offset(idx));
+            entry.frame = frame.0.try_into().expect("Failed to convert usize to u32");
+            entry.domid = domain;
+
+            fence(Ordering::SeqCst);
+
+            entry.flags = (GTF_permit_access | if readonly { GTF_readonly } else { 0 })
+                .try_into()
+                .expect("Failed to convert u32 to u16");
+        }
+
+        reference
+    }
+
+    fn grant_transfer(&mut self, domain: domid_t, frame: MachineFrameNumber) -> grant_ref_t {
+        let reference = self.get_free_entry();
+
+        let idx: isize = reference
+            .try_into()
+            .expect("Failed to convert u32 to usize");
+
+        unsafe {
+            let mut entry = *(self.table.offset(idx));
+            entry.frame = frame.0.try_into().expect("Failed to convert usize to u32");
+            entry.domid = domain;
+
+            fence(Ordering::SeqCst);
+
+            entry.flags = GTF_accept_transfer
+                .try_into()
+                .expect("Failed to convert u32 to u16");
+        }
+
+        reference
+    }
+}
+
+/// Initializes grant table
+pub fn init() {
+    lazy_static::initialize(&GRANT_TABLE)
+}
+
+/// Grants `domain` access to the supplied frame
+pub fn grant_access(domain: domid_t, frame: MachineFrameNumber, readonly: bool) -> grant_ref_t {
+    GRANT_TABLE.lock().grant_access(domain, frame, readonly)
+}
+
+/// Transfers the supplied frame to `domain`
+pub fn grant_transfer(domain: domid_t, frame: MachineFrameNumber) -> grant_ref_t {
+    GRANT_TABLE.lock().grant_transfer(domain, frame)
 }

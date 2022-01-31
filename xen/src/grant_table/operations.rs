@@ -24,6 +24,41 @@ pub struct GrantHandle {
 }
 
 impl GrantHandle {
+    /// Maps a new grant entry
+    pub unsafe fn new(
+        address: *const u8,
+        reference: u32,
+        domain: domid_t,
+        readonly: bool,
+    ) -> Result<Self, Error> {
+        let mut arg = gnttab_map_grant_ref_t {
+            // INPUT
+            host_addr: address as u64,
+            flags: GNTMAP_host_map,
+            ref_: reference,
+            dom: domain,
+            // OUTPUT
+            status: 0,
+            handle: 0,
+            dev_bus_addr: 0,
+        };
+
+        if readonly {
+            arg.flags |= GNTMAP_readonly;
+        }
+
+        grant_table_op(GNTTABOP_map_grant_ref, &mut arg as *mut _ as u64)?;
+
+        if arg.status != 0 {
+            return Err(GrantStatusError::from(arg.status).into());
+        }
+
+        Ok(GrantHandle {
+            host_addr: arg.host_addr,
+            handle: arg.handle,
+        })
+    }
+
     /// Unmaps the mapped grant reference
     pub fn unmap(&self) -> Result<(), Error> {
         let mut arg = gnttab_unmap_grant_ref_t {
@@ -43,41 +78,6 @@ impl GrantHandle {
 
         Ok(())
     }
-}
-
-/// Maps grant entry
-pub unsafe fn map_grant_entry(
-    address: *const u8,
-    reference: u32,
-    domain: domid_t,
-    readonly: bool,
-) -> Result<GrantHandle, Error> {
-    let mut arg = gnttab_map_grant_ref_t {
-        // INPUT
-        host_addr: address as u64,
-        flags: GNTMAP_host_map,
-        ref_: reference,
-        dom: domain,
-        // OUTPUT
-        status: 0,
-        handle: 0,
-        dev_bus_addr: 0,
-    };
-
-    if readonly {
-        arg.flags |= GNTMAP_readonly;
-    }
-
-    grant_table_op(GNTTABOP_map_grant_ref, &mut arg as *mut _ as u64)?;
-
-    if arg.status != 0 {
-        return Err(GrantStatusError::from(arg.status).into());
-    }
-
-    Ok(GrantHandle {
-        host_addr: arg.host_addr,
-        handle: arg.handle,
-    })
 }
 
 /// Sets up grant table

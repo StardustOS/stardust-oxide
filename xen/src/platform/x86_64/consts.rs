@@ -1,12 +1,12 @@
 //! x86_64 constants
 
-///
+/// Page shift
 pub const PAGE_SHIFT: usize = 12;
 
 /// Size of a page in bytes
 pub const PAGE_SIZE: usize = 1 << PAGE_SHIFT;
 
-///
+/// Page mask
 pub const PAGE_MASK: usize = !(PAGE_SIZE - 1);
 
 /// Width of physical address in bits
@@ -21,13 +21,16 @@ pub const PADDR_MASK: usize = (1 << PADDR_BITS) - 1;
 /// Virtual address mask
 pub const VADDR_MASK: usize = (1 << VADDR_BITS) - 1;
 
-///
+/// L1 Mask
+pub const L1_MASK: usize = (1 << L2_PAGETABLE_SHIFT) - 1;
+
+/// L1 page shift
 pub const L1_PAGETABLE_SHIFT: usize = PAGE_SHIFT;
-///
+/// L2 page shift
 pub const L2_PAGETABLE_SHIFT: usize = 21;
-///
+/// L3 page shift
 pub const L3_PAGETABLE_SHIFT: usize = 30;
-///
+/// L4 page shift
 pub const L4_PAGETABLE_SHIFT: usize = 39;
 
 /// Number of L1 pagetable entries
