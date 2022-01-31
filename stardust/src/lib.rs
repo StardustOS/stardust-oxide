@@ -13,7 +13,7 @@ use {
     log::{debug, error, info},
     xen::{
         console::Writer,
-        init_info, println,
+        grant_table, init_info, println,
         scheduler::{schedule_operation, Command, ShutdownReason},
         sections::{edata, end, erodata, etext, text_start},
         xen_sys::start_info_t,
@@ -50,6 +50,7 @@ pub fn launch(start_info: *mut start_info_t) {
 
     trap::init();
     mm::init(start_info);
+    grant_table::init();
 
     #[cfg(feature = "test")]
     test::tests();

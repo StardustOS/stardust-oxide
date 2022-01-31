@@ -4,6 +4,7 @@
 #include <xen/features.h>
 #include <xen/sched.h>
 #include <xen/xen.h>
+#include <xen/grant_table.h>
 #include <xen/io/netif.h>
 #include <xen/io/ring.h>
 #include <xen/io/console.h>

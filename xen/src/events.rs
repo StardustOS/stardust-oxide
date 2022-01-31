@@ -68,7 +68,7 @@ fn mask_event_channel(port: usize) {
 fn unmask_event_channel(port: usize) {
     unsafe {
         synch_clear_bit(
-            port.try_into().expect("failed to convert usize to u64"),
+            port.try_into().expect("Failed to convert usize to u64"),
             &mut (*SHARED_INFO).evtchn_mask[0],
         )
     };

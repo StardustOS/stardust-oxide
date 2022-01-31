@@ -3,7 +3,7 @@
 use {
     buddy_system_allocator::LockedHeap,
     log::{error, info},
-    xen::mm::VirtualAddress,
+    xen::memory::VirtualAddress,
 };
 
 #[global_allocator]

@@ -4,4 +4,4 @@
 mod x86_64;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-pub use x86_64::{consts, hypercall, time, util};
+pub use x86_64::{consts, grant_table, hypercall, time, util};

@@ -1,50 +1,16 @@
-//! Utility structures and functions
-//!
-//! Consists of wrapper types representing different kinds of memory locations. The following diagram describes the conversions between them:
-//!
-//! ```text
-//! ┌──────────────────┐           ┌───────────────┐
-//! │MachineFrameNumber│◀─────────▶│PageFrameNumber│
-//! └──────────────────┘           └───────────────┘
-//!      ▲        ▲                        ▲
-//!      │        │      ┌─────────┐       │
-//!      │        └──────│PageEntry│───┐   │
-//!      │               └─────────┘   │   │
-//!      │                             ▼   ▼
-//!      │                         ┌──────────────┐       ┌──────────────┐
-//!      └────────────────────────▶│VirtualAddress│◀─────▶│MachineAddress│
-//!                                └──────────────┘       └──────────────┘
-//!                                        ▲                      ▲
-//!                                        │                      │
-//!                                        │                      │
-//!                                        ▼                      │
-//!                                ┌───────────────┐              │
-//!                                │PhysicalAddress│◀─────────────┘
-//!                                └───────────────┘
-//! ```
-
 use {
+    super::MFN_LIST,
     crate::{
         platform::consts::{
             L1_PAGETABLE_ENTRIES, L1_PAGETABLE_SHIFT, L2_PAGETABLE_ENTRIES, L2_PAGETABLE_SHIFT,
             L3_PAGETABLE_ENTRIES, L3_PAGETABLE_SHIFT, L4_PAGETABLE_ENTRIES, L4_PAGETABLE_SHIFT,
-            PADDR_MASK, PAGE_MASK, PAGE_SHIFT, PAGE_SIZE,
+            PADDR_MASK, PAGE_MASK, PAGE_SHIFT,
         },
         sections::text_start,
         xen_sys::__HYPERVISOR_VIRT_START,
     },
     core::convert::TryInto,
 };
-
-/// Pointer to the beginning of the machine frame number list
-///
-/// Initialized with null pointer, this is probably really bad and **must** be set to the value of the `mfn_list` field of the start info structure before being used.
-static mut MFN_LIST: *mut usize = core::ptr::null_mut();
-
-/// MFN_LIST must be initialized before converting between PageFrameNumber and MachineFrameNumber
-pub(crate) fn init_mfn_list(mfn_list_addr: usize) {
-    unsafe { MFN_LIST = mfn_list_addr as *mut usize }
-}
 
 /// Page Entry
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -109,6 +75,36 @@ impl From<PageEntry> for MachineFrameNumber {
 /// Virtual address
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VirtualAddress(pub usize);
+
+impl VirtualAddress {
+    /// Given a virtual address get an entry offset into an L1 page table
+    pub fn l1_table_offset(&self) -> isize {
+        ((self.0 >> L1_PAGETABLE_SHIFT) & (L1_PAGETABLE_ENTRIES - 1))
+            .try_into()
+            .expect("Could not convert page table offset to isize")
+    }
+
+    /// Given a virtual address get an entry offset into an L2 page table
+    pub fn l2_table_offset(&self) -> isize {
+        ((self.0 >> L2_PAGETABLE_SHIFT) & (L2_PAGETABLE_ENTRIES - 1))
+            .try_into()
+            .expect("Could not convert page table offset to isize")
+    }
+
+    /// Given a virtual address get an entry offset into an L3 page table
+    pub fn l3_table_offset(&self) -> isize {
+        ((self.0 >> L3_PAGETABLE_SHIFT) & (L3_PAGETABLE_ENTRIES - 1))
+            .try_into()
+            .expect("Could not convert page table offset to isize")
+    }
+
+    /// Given a virtual address get an entry offset into an L4 page table
+    pub fn l4_table_offset(&self) -> isize {
+        ((self.0 >> L4_PAGETABLE_SHIFT) & (L4_PAGETABLE_ENTRIES - 1))
+            .try_into()
+            .expect("Could not convert page table offset to isize")
+    }
+}
 
 // to_virt
 impl From<PhysicalAddress> for VirtualAddress {
@@ -185,38 +181,4 @@ impl From<VirtualAddress> for MachineAddress {
     fn from(virt: VirtualAddress) -> Self {
         Self::from(PhysicalAddress::from(virt))
     }
-}
-
-/// Gives a page frame number after rounding the given address to the next page frame boundary
-pub fn pfn_up(phys: PhysicalAddress) -> PageFrameNumber {
-    // no pointer arithmetic here, only usage of PFN_UP in mini-os is by passing the result of `to_phys` which casts to unsigned long
-    PageFrameNumber((phys.0 + PAGE_SIZE - 1) >> L1_PAGETABLE_SHIFT)
-}
-
-/// Given a virtual address get an entry offset into an L1 page table
-pub fn l1_table_offset(address: VirtualAddress) -> isize {
-    ((address.0 >> L1_PAGETABLE_SHIFT) & (L1_PAGETABLE_ENTRIES - 1))
-        .try_into()
-        .expect("Could not convert page table offset to isize")
-}
-
-/// Given a virtual address get an entry offset into an L2 page table
-pub fn l2_table_offset(address: VirtualAddress) -> isize {
-    ((address.0 >> L2_PAGETABLE_SHIFT) & (L2_PAGETABLE_ENTRIES - 1))
-        .try_into()
-        .expect("Could not convert page table offset to isize")
-}
-
-/// Given a virtual address get an entry offset into an L3 page table
-pub fn l3_table_offset(address: VirtualAddress) -> isize {
-    ((address.0 >> L3_PAGETABLE_SHIFT) & (L3_PAGETABLE_ENTRIES - 1))
-        .try_into()
-        .expect("Could not convert page table offset to isize")
-}
-
-/// Given a virtual address get an entry offset into an L4 page table
-pub fn l4_table_offset(address: VirtualAddress) -> isize {
-    ((address.0 >> L4_PAGETABLE_SHIFT) & (L4_PAGETABLE_ENTRIES - 1))
-        .try_into()
-        .expect("Could not convert page table offset to isize")
 }
