@@ -17,6 +17,7 @@ use {
         scheduler::{schedule_operation, Command, ShutdownReason},
         sections::{edata, end, erodata, etext, text_start},
         xen_sys::start_info_t,
+        xenbus, xenstore,
     },
 };
 
@@ -51,6 +52,8 @@ pub fn launch(start_info: *mut start_info_t) {
     trap::init();
     mm::init(start_info);
     grant_table::init();
+    xenstore::init();
+    xenbus::init();
 
     #[cfg(feature = "test")]
     test::tests();

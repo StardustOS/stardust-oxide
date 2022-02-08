@@ -12,7 +12,7 @@
 .text
 
 #define ENTRY(X) .globl X ; X :
-.globl _start, shared_info, hypercall_page
+.globl _start, shared_info, hypercall_page, xenstore_page
 
 _start:
         cld
@@ -23,12 +23,15 @@ _start:
         /* Unpleasant -- the PTE that maps this page is actually overwritten */
         /* to map the real shared-info page! :-)                             */
         .org 0x1000
+
 shared_info:
         .org 0x2000
 
 hypercall_page:
         .org 0x3000
 
+xenstore_page:
+        .org 0x4000
 
 /* Offsets into shared_info_t. */
 #define evtchn_upcall_pending		/* 0 */
