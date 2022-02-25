@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2018"
 
 [dependencies]
-cty = "0.2"
+cty = "0.2.2"
 
 [build-dependencies]
-bindgen = { version = "0.59", default-features = false, features = ["runtime", "which-rustfmt"] }
+bindgen = { version = "0.59.2", default-features = false, features = ["runtime", "which-rustfmt"] }

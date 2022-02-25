@@ -5,8 +5,8 @@ edition = "2018"
 
 [dependencies]
 xen = { path = "../xen" }
-buddy_system_allocator = "0.8"
-log = { version = "0.4", features = ["release_max_level_trace"] }
+buddy_system_allocator = "0.8.0"
+log = { version = "0.4.14", features = ["release_max_level_trace"] }
 
 [features]
 # this is a really horrible solution to `custom_task_framework` not working
