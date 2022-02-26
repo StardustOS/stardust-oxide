@@ -11,9 +11,10 @@ use {
     xen_sys::{domid_t, shared_info, start_info, XENFEAT_NR_SUBMAPS},
 };
 
-pub use xen_sys;
+pub use {delay::Delay, xen_sys};
 
 pub mod console;
+mod delay;
 pub mod events;
 pub mod grant_table;
 pub mod hypercall;

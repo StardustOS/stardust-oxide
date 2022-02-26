@@ -12,7 +12,7 @@
 .text
 
 #define ENTRY(X) .globl X ; X :
-.globl _start, shared_info, hypercall_page, xenstore_page
+.globl _start, shared_info, hypercall_page
 
 _start:
         cld
@@ -29,9 +29,6 @@ shared_info:
 
 hypercall_page:
         .org 0x3000
-
-xenstore_page:
-        .org 0x4000
 
 /* Offsets into shared_info_t. */
 #define evtchn_upcall_pending		/* 0 */
