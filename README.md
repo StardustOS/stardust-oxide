@@ -2,7 +2,8 @@
 
 # `stardust-oxide`
 
-[![CI](https://github.com/StardustOS/stardust-oxide/actions/workflows/ci.yml/badge.svg)](https://github.com/StardustOS/stardust-oxide/actions/workflows/ci.yml)
+[![CI](https://github.com/StardustOS/stardust-oxide/actions/workflows/ci.yml/badge.svg)](https://github.com/StardustOS/stardust-oxide/actions/workflows/ci.yml) 
+[![LoC](https://tokei.rs/b1/github/StardustOS/stardust-oxide)](https://github.com/StardustOS/stardust-oxide)
 
 ## Usage
 
