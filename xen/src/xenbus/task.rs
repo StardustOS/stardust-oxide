@@ -1,26 +1,14 @@
 use {
-    crate::{
-        xenbus::{
-            init,
-            util::{mask_xenstore_idx, memcpy_from_ring},
-            XENBUS,
-        },
-        Delay,
-    },
+    crate::xenbus::{mask_xenstore_idx, memcpy_from_ring, XENBUS},
     alloc::vec,
-    core::{mem::size_of, time::Duration},
-    log::debug,
+    core::mem::size_of,
     xen_sys::{xsd_sockmsg, xsd_sockmsg_type_XS_WATCH_EVENT},
 };
 
 /// XenBus background task
-pub async fn task() {
-    debug!("XenBus background task started");
-
-    // ensure XenBus is initialised
-    // TODO: consider making init private and only starting the task is required
-    init();
-
+///
+/// Usually runs in a loop processing XenBus responses and events asynchronously, currently repurposed to block until a single response is read
+pub fn task() {
     let mut msg = xsd_sockmsg {
         type_: 0,
         req_id: 0,
@@ -29,9 +17,6 @@ pub async fn task() {
     };
 
     loop {
-        // yield to make sure other tasks have time to run
-        Delay::new(Duration::new(0, 100_000_000)).await;
-
         let mut xb = XENBUS.lock();
 
         if (xb.interface.rsp_prod - xb.interface.rsp_cons) < size_of::<xsd_sockmsg>() as u32 {
@@ -72,5 +57,7 @@ pub async fn task() {
         xb.interface.rsp_cons += size_of::<xsd_sockmsg>() as u32 + msg.len;
 
         xb.notify();
+
+        return;
     }
 }

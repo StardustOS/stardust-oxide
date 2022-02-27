@@ -17,7 +17,8 @@ use {
         scheduler::{schedule_operation, Command, ShutdownReason},
         sections::{edata, end, erodata, etext, text_start},
         xen_sys::start_info_t,
-        xenbus, xenstore, Delay,
+        xenbus::{self, MessageKind},
+        xenstore, Delay,
     },
 };
 
@@ -59,7 +60,7 @@ pub fn launch(start_info: *mut start_info_t) {
     test::tests();
 
     let mut executor = Executor::new();
-    executor.spawn(xenbus::task());
+    // executor.spawn(xenbus::task());
     executor.spawn(example_task());
     executor.run();
 
@@ -73,7 +74,10 @@ async fn example_task() {
     loop {
         info!("hello from example task!");
         Delay::new(Duration::new(1, 0)).await;
-        xenbus::request();
+        debug!(
+            "{:?}",
+            xenbus::request(MessageKind::Control, &[b"print\0", b"hello world!", b"\0"]).await
+        );
     }
 }
 
