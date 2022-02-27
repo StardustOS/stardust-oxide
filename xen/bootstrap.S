@@ -23,12 +23,12 @@ _start:
         /* Unpleasant -- the PTE that maps this page is actually overwritten */
         /* to map the real shared-info page! :-)                             */
         .org 0x1000
+
 shared_info:
         .org 0x2000
 
 hypercall_page:
         .org 0x3000
-
 
 /* Offsets into shared_info_t. */
 #define evtchn_upcall_pending		/* 0 */

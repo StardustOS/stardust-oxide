@@ -29,9 +29,13 @@ use {
         platform::consts::{L1_PAGETABLE_SHIFT, PAGE_SIZE},
         DOMID_SELF,
     },
+    bitflags::bitflags,
     core::convert::TryInto,
     log::warn,
-    xen_sys::{__HYPERVISOR_memory_op, __HYPERVISOR_mmu_update, mmu_update_t},
+    xen_sys::{
+        __HYPERVISOR_memory_op, __HYPERVISOR_mmu_update, __HYPERVISOR_update_va_mapping,
+        mmu_update_t,
+    },
 };
 
 pub mod page_table;
@@ -121,5 +125,39 @@ pub fn hypervisor_mmu_update(reqs: &[mmu_update_t]) -> Result<(), hypercall::Err
         )
     }
 
+    Ok(())
+}
+
+bitflags! {
+/// Flags for `update_va_mapping`
+pub struct TLBFlushFlags: u64 {
+    /// No flushing at all.
+    const NONE = 0b000;
+    /// Flush entire TLB(s).
+    const FLUSH = 0b001;
+    /// Flush only one entry.
+    const INVLPG = 0b011;
+    /// Flush subset of TLBs.
+    const MULTI = 0b000;
+    /// Flush local TLB.
+    const LOCAL = 0b000;
+    /// Flush all TLBs.
+    const ALL = 0b100;
+}}
+
+/// Update virtual address mapping
+pub fn update_va_mapping(
+    va: VirtualAddress,
+    page: PageEntry,
+    flags: TLBFlushFlags,
+) -> Result<(), hypercall::Error> {
+    unsafe {
+        hypercall!(
+            __HYPERVISOR_update_va_mapping,
+            va.0 as u64,
+            page.0 as u64,
+            flags.bits()
+        )
+    }?;
     Ok(())
 }

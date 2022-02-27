@@ -9,7 +9,7 @@ extern crate alloc;
 
 use {
     core::{slice, str, time::Duration},
-    executor::{Delay, Executor},
+    executor::Executor,
     log::{debug, error, info},
     xen::{
         console::Writer,
@@ -17,6 +17,8 @@ use {
         scheduler::{schedule_operation, Command, ShutdownReason},
         sections::{edata, end, erodata, etext, text_start},
         xen_sys::start_info_t,
+        xenbus::{self, MessageKind},
+        xenstore, Delay,
     },
 };
 
@@ -51,13 +53,15 @@ pub fn launch(start_info: *mut start_info_t) {
     trap::init();
     mm::init(start_info);
     grant_table::init();
+    xenstore::init();
+    xenbus::init();
 
     #[cfg(feature = "test")]
     test::tests();
 
     let mut executor = Executor::new();
-    executor.spawn(example_task_a());
-    executor.spawn(example_task_b());
+    // executor.spawn(xenbus::task());
+    executor.spawn(example_task());
     executor.run();
 
     // if run() terminates then all tasks have completed, exit cleanly
@@ -66,18 +70,14 @@ pub fn launch(start_info: *mut start_info_t) {
 }
 
 // prints every 5 seconds
-async fn example_task_a() {
+async fn example_task() {
     loop {
-        info!("hello from task a!");
-        Delay::new(Duration::new(5, 0)).await;
-    }
-}
-
-// prints every second
-async fn example_task_b() {
-    loop {
-        info!("hello from task b!");
+        info!("hello from example task!");
         Delay::new(Duration::new(1, 0)).await;
+        debug!(
+            "{:?}",
+            xenbus::request(MessageKind::Control, &[b"print\0", b"hello world!", b"\0"]).await
+        );
     }
 }
 

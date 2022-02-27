@@ -6,15 +6,15 @@
 extern crate alloc;
 
 use {
+    crate::memory::{update_va_mapping, PageEntry, TLBFlushFlags, VirtualAddress},
     core::convert::TryInto,
-    xen_sys::{
-        __HYPERVISOR_update_va_mapping, domid_t, shared_info, start_info, XENFEAT_NR_SUBMAPS,
-    },
+    xen_sys::{domid_t, shared_info, start_info, XENFEAT_NR_SUBMAPS},
 };
 
-pub use xen_sys;
+pub use {delay::Delay, xen_sys};
 
 pub mod console;
+mod delay;
 pub mod events;
 pub mod grant_table;
 pub mod hypercall;
@@ -23,6 +23,7 @@ pub mod platform;
 pub mod scheduler;
 pub mod sections;
 pub mod trap;
+pub mod xenbus;
 pub mod xenstore;
 
 /// Domain ID of this domain
@@ -50,13 +51,10 @@ pub fn init_info(start_info: *mut start_info) {
             .expect("Failed to convert u64 to usize"),
     );
 
-    unsafe {
-        hypercall!(
-            __HYPERVISOR_update_va_mapping,
-            SHARED_INFO as u64,
-            (*START_INFO).shared_info | 7,
-            2u64
-        )
-    }
+    update_va_mapping(
+        VirtualAddress(unsafe { SHARED_INFO } as usize),
+        PageEntry(unsafe { (*START_INFO).shared_info } as usize | 7),
+        TLBFlushFlags::INVLPG,
+    )
     .expect("Failed to map shared info page");
 }

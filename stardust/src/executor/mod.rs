@@ -9,10 +9,7 @@ use {
     task::Task,
 };
 
-mod delay;
 mod task;
-
-pub use delay::Delay;
 
 /// Basic executor for async tasks
 pub struct Executor {

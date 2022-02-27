@@ -1,11 +1,11 @@
 use {
+    crate::platform::time::get_system_time,
     core::{
         future::Future,
         pin::Pin,
         task::{Context, Poll},
         time::Duration,
     },
-    xen::platform::time::get_system_time,
 };
 
 /// Future for delaying asynchronous execution for the supplied Duration

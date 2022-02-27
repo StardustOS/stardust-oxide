@@ -18,7 +18,7 @@ use {
         sync::atomic::{fence, Ordering},
     },
     lazy_static::lazy_static,
-    log::error,
+    log::{debug, error},
     spin::Mutex,
     xen_sys::{
         evtchn_port_t, evtchn_send, xenstore_domain_interface, xsd_sockmsg,
@@ -51,6 +51,12 @@ lazy_static! {
             req_id: 0,
         })
     };
+}
+
+/// Initialize XenStore
+pub fn init() {
+    lazy_static::initialize(&XENSTORE);
+    debug!("Initialized XenStore");
 }
 
 /// Write a key-value pair to the XenStore
@@ -328,5 +334,5 @@ impl XenStore {
 }
 
 fn mask_xenstore_idx(idx: usize) -> usize {
-    (idx) & (usize::try_from(XENSTORE_RING_SIZE).expect("Failed to convert u32 to usize") - 1)
+    idx & (usize::try_from(XENSTORE_RING_SIZE).expect("Failed to convert u32 to usize") - 1)
 }

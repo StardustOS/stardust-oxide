@@ -19,6 +19,7 @@ echo "kernel = \"$1\"" >> $temp_file
 echo "memory = 32" >> $temp_file
 echo "name = \"stardust\"" >> $temp_file
 echo "on_crash = 'destroy'" >> $temp_file
+echo "vif = ['']" >> $temp_file
 
 # start VM
 sudo xl create -c $temp_file
