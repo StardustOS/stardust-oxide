@@ -8,7 +8,7 @@ use {
         memory::{MachineFrameNumber, VirtualAddress},
         START_INFO,
     },
-    alloc::{collections::BTreeMap, string::String, vec::Vec},
+    alloc::{collections::BTreeMap, string::String},
     core::{
         cmp,
         convert::TryInto,
@@ -83,8 +83,10 @@ pub async fn request(kind: MessageKind, data: &[&[u8]]) -> (MessageHeader, Strin
     task::task();
 
     loop {
-        if let Some((msg, data)) = XENBUS.lock().responses.remove(&0) {
-            return (msg, alloc::string::String::from_utf8(data).unwrap());
+        // assign result of removal to limit lifetime of held lock
+        let resp = XENBUS.lock().responses.remove(&0);
+        if let Some(r) = resp {
+            return r;
         }
     }
 }
@@ -93,7 +95,7 @@ pub async fn request(kind: MessageKind, data: &[&[u8]]) -> (MessageHeader, Strin
 struct XenBus {
     interface: &'static mut xenstore_domain_interface,
     event_channel: u32,
-    responses: BTreeMap<u32, (MessageHeader, Vec<u8>)>,
+    responses: BTreeMap<u32, (MessageHeader, String)>,
 }
 
 impl XenBus {
@@ -180,11 +182,17 @@ fn mask_xenstore_idx(idx: u32) -> u32 {
     idx & (XENSTORE_RING_SIZE - 1)
 }
 
-unsafe fn memcpy_from_ring(ring: *mut i8, destination: *mut i8, offset: usize, length: usize) {
+unsafe fn copy_from_ring<T: Copy>(ring: &[T], destination: &mut [T], offset: usize, length: usize) {
     let c1 = cmp::min(length, XENSTORE_RING_SIZE as usize - offset);
     let c2 = length - c1;
-    copy_nonoverlapping(ring.add(offset), destination, c1);
-    copy_nonoverlapping(ring, destination.add(c1), c2);
+
+    if c1 != 0 {
+        destination[..c1].copy_from_slice(&ring[offset..offset + c1]);
+    }
+
+    if c2 != 0 {
+        destination[c1..].copy_from_slice(&ring[..c2]);
+    }
 }
 
 /// State of XenBus connection

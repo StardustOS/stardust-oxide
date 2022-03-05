@@ -73,11 +73,12 @@ pub fn launch(start_info: *mut start_info_t) {
 async fn example_task() {
     loop {
         info!("hello from example task!");
-        Delay::new(Duration::new(1, 0)).await;
-        debug!(
-            "{:?}",
-            xenbus::request(MessageKind::Control, &[b"print\0", b"hello world!", b"\0"]).await
-        );
+        Delay::new(Duration::new(0, 500_000_000)).await;
+
+        let resp =
+            xenbus::request(MessageKind::Control, &[b"print\0", b"hello world!", b"\0"]).await;
+
+        debug!("{:?}", resp);
     }
 }
 
