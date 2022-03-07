@@ -8,23 +8,23 @@
 extern crate alloc;
 
 use {
-    core::{slice, str, time::Duration},
+    core::{slice, str},
     executor::Executor,
-    log::{debug, error, info},
+    log::{debug, error},
     xen::{
         console::Writer,
         grant_table, init_info, println,
         scheduler::{schedule_operation, Command, ShutdownReason},
         sections::{edata, end, erodata, etext, text_start},
         xen_sys::start_info_t,
-        xenbus::{self, MessageKind},
-        xenstore, Delay,
+        xenbus, xenstore,
     },
 };
 
 mod executor;
 mod logger;
 mod mm;
+mod net;
 mod trap;
 
 #[cfg(feature = "test")]
@@ -61,25 +61,12 @@ pub fn launch(start_info: *mut start_info_t) {
 
     let mut executor = Executor::new();
     // executor.spawn(xenbus::task());
-    executor.spawn(example_task());
+    executor.spawn(net::server());
     executor.run();
 
     // if run() terminates then all tasks have completed, exit cleanly
     Writer::flush();
     schedule_operation(Command::Shutdown(ShutdownReason::Poweroff));
-}
-
-// prints every 5 seconds
-async fn example_task() {
-    loop {
-        info!("hello from example task!");
-        Delay::new(Duration::new(0, 500_000_000)).await;
-
-        let resp =
-            xenbus::request(MessageKind::Control, &[b"print\0", b"hello world!", b"\0"]).await;
-
-        debug!("{:?}", resp);
-    }
 }
 
 fn print_start_info(start_info: &start_info_t) {

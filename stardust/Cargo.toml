@@ -7,6 +7,8 @@ edition = "2018"
 xen = { path = "../xen" }
 buddy_system_allocator = "0.8.0"
 log = { version = "0.4.14", features = ["release_max_level_trace"] }
+smoltcp = { version = "0.8.0", default-features = false, features = ["proto-ipv4", "proto-ipv6", "medium-ethernet", "socket-tcp", "log"] }
+lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 
 [features]
 # this is a really horrible solution to `custom_task_framework` not working
