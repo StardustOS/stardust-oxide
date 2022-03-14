@@ -44,23 +44,25 @@ pub async fn server() {
 
         Delay::new(Duration::new(0, 100_000_000)).await;
 
-        match iface.poll(Instant::from_micros((get_system_time() >> 10) as i64)) {
-            Ok(_) => {}
-            Err(e) => {
-                debug!("poll error: {}", e);
-            }
-        }
+        iface.device_mut().receive();
 
-        let socket = iface.get_socket::<TcpSocket>(handle);
-        if !socket.is_open() {
-            socket.listen(80).unwrap();
-        }
+        // match iface.poll(Instant::from_micros((get_system_time() >> 10) as i64)) {
+        //     Ok(_) => {}
+        //     Err(e) => {
+        //         debug!("poll error: {}", e);
+        //     }
+        // }
 
-        if socket.can_send() {
-            debug!("tcp:80 send greeting");
-            writeln!(socket, "hello").unwrap();
-            debug!("tcp:80 close");
-            socket.close();
-        }
+        // let socket = iface.get_socket::<TcpSocket>(handle);
+        // if !socket.is_open() {
+        //     socket.listen(80).unwrap();
+        // }
+
+        // if socket.can_send() {
+        //     debug!("tcp:80 send greeting");
+        //     writeln!(socket, "hello").unwrap();
+        //     debug!("tcp:80 close");
+        //     socket.close();
+        // }
     }
 }

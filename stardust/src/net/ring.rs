@@ -1,7 +1,9 @@
 use {
     alloc::alloc::{alloc_zeroed, dealloc, Layout},
-    core::fmt::Debug,
-    core::mem::size_of,
+    core::{
+        mem::size_of,
+        sync::atomic::{fence, Ordering},
+    },
     memoffset::offset_of,
     xen::{
         platform::consts::PAGE_SIZE,
@@ -14,9 +16,7 @@ pub struct Ring<S: SharedRingInner>(pub *mut S);
 
 impl<S: SharedRingInner> Ring<S> {
     pub fn new() -> Self {
-        let ptr = unsafe { alloc_zeroed(LAYOUT) as *mut S };
-
-        Self(ptr)
+        Self(S::new())
     }
 
     pub fn size(&self) -> usize {
@@ -36,6 +36,26 @@ impl<S: SharedRingInner> Ring<S> {
     pub fn debug(&self) {
         unsafe { &*self.0 }.debug();
     }
+
+    pub fn get(&mut self, index: usize) -> *mut S::Element {
+        unsafe { &mut *self.0 }.get(index)
+    }
+
+    pub fn req_prod(&self) -> u32 {
+        unsafe { &*self.0 }.req_prod()
+    }
+
+    pub fn set_req_prod(&mut self, val: u32) {
+        unsafe { &mut *self.0 }.set_req_prod(val)
+    }
+
+    pub fn req_event(&self) -> u32 {
+        unsafe { &*self.0 }.req_event()
+    }
+
+    pub fn set_rsp_event(&mut self, val: u32) {
+        unsafe { &mut *self.0 }.set_rsp_event(val)
+    }
 }
 
 impl<S: SharedRingInner> Drop for Ring<S> {
@@ -46,11 +66,37 @@ impl<S: SharedRingInner> Drop for Ring<S> {
 
 /// Trait for Xen shared ring types
 pub trait SharedRingInner {
+    type Element;
+
+    fn new() -> *mut Self;
+
     fn size() -> usize;
+
     fn debug(&self);
+
+    fn get(&mut self, index: usize) -> *mut Self::Element;
+
+    fn req_prod(&self) -> u32;
+
+    fn set_req_prod(&mut self, val: u32);
+
+    fn req_event(&self) -> u32;
+
+    fn set_rsp_event(&mut self, val: u32);
 }
 
 impl SharedRingInner for netif_tx_sring {
+    type Element = netif_tx_sring_entry;
+
+    fn new() -> *mut Self {
+        let ptr = unsafe { alloc_zeroed(LAYOUT) as *mut netif_tx_sring };
+        unsafe {
+            (*ptr).req_event = 1;
+            (*ptr).rsp_event = 1;
+        }
+        ptr
+    }
+
     fn size() -> usize {
         rd32(
             ((PAGE_SIZE - offset_of!(netif_tx_sring, ring)) / size_of::<netif_tx_sring_entry>())
@@ -60,16 +106,47 @@ impl SharedRingInner for netif_tx_sring {
 
     fn debug(&self) {
         log::trace!(
-            "TX: req_prod: {}, req_event: {}, rsp_prod: {}, rsp_event: {}",
+            "tx: {} {} {} {}",
             self.req_prod,
             self.req_event,
             self.rsp_prod,
             self.rsp_event
         );
     }
+
+    fn get(&mut self, index: usize) -> *mut Self::Element {
+        unsafe { self.ring.as_mut_ptr().add(index) }
+    }
+
+    fn req_prod(&self) -> u32 {
+        self.req_prod
+    }
+
+    fn set_req_prod(&mut self, val: u32) {
+        self.req_prod = val
+    }
+
+    fn req_event(&self) -> u32 {
+        self.req_event
+    }
+
+    fn set_rsp_event(&mut self, val: u32) {
+        self.rsp_event = val
+    }
 }
 
 impl SharedRingInner for netif_rx_sring {
+    type Element = netif_rx_sring_entry;
+
+    fn new() -> *mut Self {
+        let ptr = unsafe { alloc_zeroed(LAYOUT) as *mut netif_rx_sring };
+        unsafe {
+            (*ptr).req_event = 1;
+            (*ptr).rsp_event = 1;
+        }
+        ptr
+    }
+
     fn size() -> usize {
         rd32(
             ((PAGE_SIZE - offset_of!(netif_rx_sring, ring)) / size_of::<netif_rx_sring_entry>())
@@ -79,20 +156,63 @@ impl SharedRingInner for netif_rx_sring {
 
     fn debug(&self) {
         log::trace!(
-            "RX: req_prod: {}, req_event: {}, rsp_prod: {}, rsp_event: {}",
+            "rx: {} {} {} {}",
             self.req_prod,
             self.req_event,
             self.rsp_prod,
             self.rsp_event
         );
     }
+
+    fn get(&mut self, index: usize) -> *mut Self::Element {
+        unsafe { self.ring.as_mut_ptr().add(index) }
+    }
+
+    fn req_prod(&self) -> u32 {
+        self.req_prod
+    }
+
+    fn set_req_prod(&mut self, val: u32) {
+        self.req_prod = val
+    }
+
+    fn req_event(&self) -> u32 {
+        self.req_event
+    }
+
+    fn set_rsp_event(&mut self, val: u32) {
+        self.rsp_event = val
+    }
 }
 
 pub struct RingFront<S: SharedRingInner> {
-    req_prod_pvt: u32,
-    rsp_cons: u32,
-    nr_ents: u32,
+    pub req_prod_pvt: u32,
+    pub rsp_cons: u32,
+    pub nr_ents: u32,
     pub sring: Ring<S>,
+}
+
+impl<S: SharedRingInner> RingFront<S> {
+    pub fn get(&mut self, idx: usize) -> *mut S::Element {
+        self.sring.get(idx & (S::size() - 1))
+    }
+
+    pub fn push_requests(&mut self) -> bool {
+        let old = self.sring.req_prod();
+        let new = self.req_prod_pvt;
+
+        fence(Ordering::SeqCst);
+
+        self.sring.set_req_prod(new);
+
+        fence(Ordering::SeqCst);
+
+        (new - self.sring.req_event()) < (new - old)
+    }
+
+    pub fn set_rsp_event(&mut self, val: u32) {
+        self.sring.set_rsp_event(val)
+    }
 }
 
 /// Round a 32-bit unsigned constant down to the nearest power of 2
