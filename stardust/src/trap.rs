@@ -1,14 +1,46 @@
 //! Trap handlers
 
 use xen::{
-    dbg,
+    dbg, hypercall,
     trap::{set_trap_table, TrapInfo},
-    xen_sys::FLAT_KERNEL_CS,
+    xen_sys::{__HYPERVISOR_set_callbacks, FLAT_KERNEL_CS},
 };
+
+extern "C" {
+    fn divide_error();
+    fn debug();
+    fn int3();
+    fn overflow();
+    fn bounds();
+    fn invalid_op();
+    fn device_not_available();
+    fn coprocessor_segment_overrun();
+    fn invalid_TSS();
+    fn segment_not_present();
+    fn stack_segment();
+    fn general_protection();
+    fn page_fault();
+    fn spurious_interrupt_bug();
+    fn coprocessor_error();
+    fn alignment_check();
+    fn simd_coprocessor_error();
+    fn hypervisor_callback();
+    fn failsafe_callback();
+}
 
 /// Registers the trap handlers
 pub fn init() {
     set_trap_table(&TRAP_TABLE);
+    // unsafe {
+    //     hypercall!(
+    //         __HYPERVISOR_set_callbacks,
+    //         FLAT_KERNEL_CS,
+    //         hypervisor_callback as u64,
+    //         FLAT_KERNEL_CS,
+    //         failsafe_callback as u64
+    //     )
+    //     .expect("failed to set callbacks")
+    // };
 }
 
 static TRAP_TABLE: [TrapInfo; 18] = [
@@ -121,26 +153,6 @@ static TRAP_TABLE: [TrapInfo; 18] = [
         address: 0 as *const (),
     },
 ];
-
-extern "C" {
-    fn divide_error();
-    fn debug();
-    fn int3();
-    fn overflow();
-    fn bounds();
-    fn invalid_op();
-    fn device_not_available();
-    fn coprocessor_segment_overrun();
-    fn invalid_TSS();
-    fn segment_not_present();
-    fn stack_segment();
-    fn general_protection();
-    fn page_fault();
-    fn spurious_interrupt_bug();
-    fn coprocessor_error();
-    fn alignment_check();
-    fn simd_coprocessor_error();
-}
 
 #[no_mangle]
 /// Handler for divide error trap

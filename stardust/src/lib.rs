@@ -3,7 +3,6 @@
 #![no_std]
 #![feature(alloc_error_handler)]
 #![deny(missing_docs)]
-#![deny(warnings)]
 
 extern crate alloc;
 
@@ -13,7 +12,7 @@ use {
     log::{debug, error},
     xen::{
         console::Writer,
-        grant_table, init_info, println,
+        events, grant_table, init_info, println,
         scheduler::{schedule_operation, Command, ShutdownReason},
         sections::{edata, end, erodata, etext, text_start},
         xen_sys::start_info_t,
@@ -51,6 +50,7 @@ pub fn launch(start_info: *mut start_info_t) {
     print_start_info(start_info);
 
     trap::init();
+    // events::init();
     mm::init(start_info);
     grant_table::init();
     xenstore::init();

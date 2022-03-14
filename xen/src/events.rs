@@ -3,7 +3,7 @@
 use {
     crate::{
         hypercall,
-        platform::util::{synch_clear_bit, synch_set_bit},
+        platform::util::{init_events, synch_clear_bit, synch_set_bit},
         println, SHARED_INFO,
     },
     core::convert::TryInto,
@@ -37,6 +37,10 @@ pub fn init() {
     for i in 0..unsafe { EVENT_ACTIONS.len() } {
         mask_event_channel(i);
     }
+
+    init_events();
+
+    unsafe { *SHARED_INFO }.vcpu_info[0].evtchn_upcall_mask = 0;
 }
 
 /// Bind an event handler to an event channel
