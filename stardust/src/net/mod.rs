@@ -40,7 +40,8 @@ pub async fn server() {
     debug!("starting TCP server");
 
     loop {
-        iface.device().debug();
+        log::trace!("{:?}", iface.device().tx);
+        log::trace!("{:?}", iface.device().rx);
 
         Delay::new(Duration::new(0, 100_000_000)).await;
 

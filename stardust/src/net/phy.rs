@@ -1,5 +1,5 @@
 use {
-    super::ring::{Ring, RingFront, LAYOUT},
+    super::ring::{Ring, PAGE_LAYOUT},
     alloc::{alloc::alloc, format},
     core::ptr,
     smoltcp::{
@@ -34,11 +34,11 @@ pub struct Device {
     backend_domain: domid_t,
     event_channel_port: evtchn_port_t,
 
-    pub tx: RingFront<netif_tx_sring>,
+    pub tx: Ring<netif_tx_sring>,
     tx_ring_ref: grant_ref_t,
     tx_buffers: [Buffer; RING_SIZE],
 
-    pub rx: RingFront<netif_rx_sring>,
+    pub rx: Ring<netif_rx_sring>,
     rx_ring_ref: grant_ref_t,
     rx_buffers: [Buffer; RING_SIZE],
 }
@@ -64,19 +64,22 @@ impl Device {
             grant_ref: 0,
         }; RING_SIZE];
 
-        let txs = Ring::<netif_tx_sring>::new();
-        assert!(txs.size() == RING_SIZE);
+        let tx = Ring::<netif_tx_sring>::new();
+        assert!(tx.size() == RING_SIZE);
 
-        let rxs = Ring::<netif_rx_sring>::new();
-        assert!(rxs.size() == RING_SIZE);
+        let rx = Ring::<netif_rx_sring>::new();
+        assert!(rx.size() == RING_SIZE);
 
-        let tx_ring_ref =
-            grant_table::grant_access(backend_domain, VirtualAddress(txs.0 as usize).into(), false);
-        let rx_ring_ref =
-            grant_table::grant_access(backend_domain, VirtualAddress(rxs.0 as usize).into(), false);
-
-        let tx = txs.front();
-        let rx = rxs.front();
+        let tx_ring_ref = grant_table::grant_access(
+            backend_domain,
+            VirtualAddress(tx.sring as *mut _ as usize).into(),
+            false,
+        );
+        let rx_ring_ref = grant_table::grant_access(
+            backend_domain,
+            VirtualAddress(rx.sring as *mut _ as usize).into(),
+            false,
+        );
 
         let mut celf = Self {
             mac,
@@ -105,7 +108,7 @@ impl Device {
 
     fn init_buffers(&mut self) {
         for mut buf in self.rx_buffers {
-            unsafe { buf.page = alloc(LAYOUT) }
+            unsafe { buf.page = alloc(PAGE_LAYOUT) }
         }
 
         for i in 0..RING_SIZE {
@@ -235,11 +238,6 @@ impl Device {
         self.mac
     }
 
-    pub fn debug(&self) {
-        self.tx.sring.debug();
-        self.rx.sring.debug();
-    }
-
     pub fn receive(&mut self) {}
 }
 
@@ -306,7 +304,7 @@ impl<'a> phy::Device<'a> for Device {
     }
 }
 
-pub struct PhyRxToken<'a>(&'a mut RingFront<netif_rx_sring>);
+pub struct PhyRxToken<'a>(&'a mut Ring<netif_rx_sring>);
 
 impl<'a> phy::RxToken for PhyRxToken<'a> {
     fn consume<R, F>(mut self, _timestamp: Instant, f: F) -> smoltcp::Result<R>
@@ -320,7 +318,7 @@ impl<'a> phy::RxToken for PhyRxToken<'a> {
     }
 }
 
-pub struct PhyTxToken<'a>(&'a mut RingFront<netif_tx_sring>);
+pub struct PhyTxToken<'a>(&'a mut Ring<netif_tx_sring>);
 
 impl<'a> phy::TxToken for PhyTxToken<'a> {
     fn consume<R, F>(self, _timestamp: Instant, len: usize, f: F) -> smoltcp::Result<R>

@@ -1,6 +1,7 @@
 use {
     alloc::alloc::{alloc_zeroed, dealloc, Layout},
     core::{
+        fmt::Debug,
         mem::size_of,
         sync::atomic::{fence, Ordering},
     },
@@ -11,61 +12,73 @@ use {
     },
 };
 
-pub const LAYOUT: Layout = unsafe { Layout::from_size_align_unchecked(PAGE_SIZE, PAGE_SIZE) };
-pub struct Ring<S: SharedRingInner>(pub *mut S);
+pub const PAGE_LAYOUT: Layout = unsafe { Layout::from_size_align_unchecked(PAGE_SIZE, PAGE_SIZE) };
 
-impl<S: SharedRingInner> Ring<S> {
+pub struct Ring<S: 'static + RawRing> {
+    pub req_prod_pvt: u32,
+    pub rsp_cons: u32,
+    pub nr_ents: u32,
+    pub sring: &'static mut S,
+}
+
+impl<S: RawRing> Drop for Ring<S> {
+    fn drop(&mut self) {
+        unsafe { dealloc(self.sring as *mut _ as *mut u8, PAGE_LAYOUT) }
+    }
+}
+
+impl<S: RawRing> Debug for Ring<S> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RingFront")
+            .field("req_prod_pvt", &self.req_prod_pvt)
+            .field("rsp_cons", &self.rsp_cons)
+            .field("nr_ents", &self.nr_ents)
+            .field("sring_req_prod", &self.sring.req_prod())
+            .field("sring_req_event", &self.sring.req_event())
+            .field("sring_rsp_prod", &self.sring.rsp_prod())
+            .field("sring_rsp_event", &self.sring.rsp_event())
+            .finish()
+    }
+}
+
+impl<S: RawRing> Ring<S> {
     pub fn new() -> Self {
-        Self(S::new())
+        Self {
+            req_prod_pvt: 0,
+            rsp_cons: 0,
+            nr_ents: S::size() as u32,
+            sring: unsafe { &mut *S::new() },
+        }
     }
 
     pub fn size(&self) -> usize {
         S::size()
     }
 
-    /// Consume the ring and return the front half
-    pub fn front(self) -> RingFront<S> {
-        RingFront {
-            req_prod_pvt: 0,
-            rsp_cons: 0,
-            nr_ents: self.size() as u32,
-            sring: self,
-        }
+    pub fn get(&mut self, idx: usize) -> *mut S::Element {
+        self.sring.get(idx & (S::size() - 1))
     }
 
-    pub fn debug(&self) {
-        unsafe { &*self.0 }.debug();
-    }
+    pub fn push_requests(&mut self) -> bool {
+        let old = self.sring.req_prod();
+        let new = self.req_prod_pvt;
 
-    pub fn get(&mut self, index: usize) -> *mut S::Element {
-        unsafe { &mut *self.0 }.get(index)
-    }
+        fence(Ordering::SeqCst);
 
-    pub fn req_prod(&self) -> u32 {
-        unsafe { &*self.0 }.req_prod()
-    }
+        self.sring.set_req_prod(new);
 
-    pub fn set_req_prod(&mut self, val: u32) {
-        unsafe { &mut *self.0 }.set_req_prod(val)
-    }
+        fence(Ordering::SeqCst);
 
-    pub fn req_event(&self) -> u32 {
-        unsafe { &*self.0 }.req_event()
+        (new - self.sring.req_event()) < (new - old)
     }
 
     pub fn set_rsp_event(&mut self, val: u32) {
-        unsafe { &mut *self.0 }.set_rsp_event(val)
-    }
-}
-
-impl<S: SharedRingInner> Drop for Ring<S> {
-    fn drop(&mut self) {
-        unsafe { dealloc(self.0 as *mut u8, LAYOUT) }
+        self.sring.set_rsp_event(val)
     }
 }
 
 /// Trait for Xen shared ring types
-pub trait SharedRingInner {
+pub trait RawRing {
     type Element;
 
     fn new() -> *mut Self;
@@ -77,19 +90,21 @@ pub trait SharedRingInner {
     fn get(&mut self, index: usize) -> *mut Self::Element;
 
     fn req_prod(&self) -> u32;
+    fn req_event(&self) -> u32;
+    fn rsp_prod(&self) -> u32;
+    fn rsp_event(&self) -> u32;
 
     fn set_req_prod(&mut self, val: u32);
-
-    fn req_event(&self) -> u32;
-
+    fn set_req_event(&mut self, val: u32);
+    fn set_rsp_prod(&mut self, val: u32);
     fn set_rsp_event(&mut self, val: u32);
 }
 
-impl SharedRingInner for netif_tx_sring {
+impl RawRing for netif_tx_sring {
     type Element = netif_tx_sring_entry;
 
     fn new() -> *mut Self {
-        let ptr = unsafe { alloc_zeroed(LAYOUT) as *mut netif_tx_sring };
+        let ptr = unsafe { alloc_zeroed(PAGE_LAYOUT) as *mut netif_tx_sring };
         unsafe {
             (*ptr).req_event = 1;
             (*ptr).rsp_event = 1;
@@ -121,25 +136,35 @@ impl SharedRingInner for netif_tx_sring {
     fn req_prod(&self) -> u32 {
         self.req_prod
     }
+    fn req_event(&self) -> u32 {
+        self.req_event
+    }
+    fn rsp_prod(&self) -> u32 {
+        self.rsp_prod
+    }
+    fn rsp_event(&self) -> u32 {
+        self.rsp_event
+    }
 
     fn set_req_prod(&mut self, val: u32) {
         self.req_prod = val
     }
-
-    fn req_event(&self) -> u32 {
-        self.req_event
+    fn set_req_event(&mut self, val: u32) {
+        self.req_event = val
     }
-
+    fn set_rsp_prod(&mut self, val: u32) {
+        self.rsp_prod = val
+    }
     fn set_rsp_event(&mut self, val: u32) {
         self.rsp_event = val
     }
 }
 
-impl SharedRingInner for netif_rx_sring {
+impl RawRing for netif_rx_sring {
     type Element = netif_rx_sring_entry;
 
     fn new() -> *mut Self {
-        let ptr = unsafe { alloc_zeroed(LAYOUT) as *mut netif_rx_sring };
+        let ptr = unsafe { alloc_zeroed(PAGE_LAYOUT) as *mut netif_rx_sring };
         unsafe {
             (*ptr).req_event = 1;
             (*ptr).rsp_event = 1;
@@ -171,47 +196,27 @@ impl SharedRingInner for netif_rx_sring {
     fn req_prod(&self) -> u32 {
         self.req_prod
     }
+    fn req_event(&self) -> u32 {
+        self.req_event
+    }
+    fn rsp_prod(&self) -> u32 {
+        self.rsp_prod
+    }
+    fn rsp_event(&self) -> u32 {
+        self.rsp_event
+    }
 
     fn set_req_prod(&mut self, val: u32) {
         self.req_prod = val
     }
-
-    fn req_event(&self) -> u32 {
-        self.req_event
+    fn set_req_event(&mut self, val: u32) {
+        self.req_event = val
     }
-
+    fn set_rsp_prod(&mut self, val: u32) {
+        self.rsp_prod = val
+    }
     fn set_rsp_event(&mut self, val: u32) {
         self.rsp_event = val
-    }
-}
-
-pub struct RingFront<S: SharedRingInner> {
-    pub req_prod_pvt: u32,
-    pub rsp_cons: u32,
-    pub nr_ents: u32,
-    pub sring: Ring<S>,
-}
-
-impl<S: SharedRingInner> RingFront<S> {
-    pub fn get(&mut self, idx: usize) -> *mut S::Element {
-        self.sring.get(idx & (S::size() - 1))
-    }
-
-    pub fn push_requests(&mut self) -> bool {
-        let old = self.sring.req_prod();
-        let new = self.req_prod_pvt;
-
-        fence(Ordering::SeqCst);
-
-        self.sring.set_req_prod(new);
-
-        fence(Ordering::SeqCst);
-
-        (new - self.sring.req_event()) < (new - old)
-    }
-
-    pub fn set_rsp_event(&mut self, val: u32) {
-        self.sring.set_rsp_event(val)
     }
 }
 
