@@ -52,14 +52,14 @@ impl GrantTable {
         let mut celf = Self { list, table };
 
         for i in NUM_RESERVED_ENTRIES..NUM_GRANT_ENTRIES {
-            celf.put_free_entry(i);
+            celf.put_free_entry(i as u32);
         }
 
         celf
     }
 
-    fn put_free_entry(&mut self, reference: usize) {
-        self.list[reference] = self.list[0];
+    fn put_free_entry(&mut self, reference: grant_ref_t) {
+        self.list[reference as usize] = self.list[0];
         self.list[0] = reference
             .try_into()
             .expect("Failed to convert usize to grant_ref_t");
@@ -119,6 +119,12 @@ impl GrantTable {
 
         reference
     }
+
+    fn grant_end(&mut self, reference: grant_ref_t) {
+        unsafe { *(self.table.offset(reference as isize)) }.flags = 0;
+
+        self.put_free_entry(reference);
+    }
 }
 
 /// Initializes grant table
@@ -134,4 +140,9 @@ pub fn grant_access(domain: domid_t, frame: MachineFrameNumber, readonly: bool) 
 /// Transfers the supplied frame to `domain`
 pub fn grant_transfer(domain: domid_t, frame: MachineFrameNumber) -> grant_ref_t {
     GRANT_TABLE.lock().grant_transfer(domain, frame)
+}
+
+/// Ends access to the supplied grant reference
+pub fn grant_end(reference: grant_ref_t) {
+    GRANT_TABLE.lock().grant_end(reference)
 }

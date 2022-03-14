@@ -47,6 +47,8 @@ pub async fn server() {
 
         iface.device_mut().receive();
 
+        xen::scheduler::schedule_operation(xen::scheduler::Command::Yield);
+
         // match iface.poll(Instant::from_micros((get_system_time() >> 10) as i64)) {
         //     Ok(_) => {}
         //     Err(e) => {

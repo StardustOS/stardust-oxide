@@ -1,7 +1,10 @@
 use {
     super::ring::{Ring, PAGE_LAYOUT},
     alloc::{alloc::alloc, format},
-    core::ptr,
+    core::{
+        ptr,
+        sync::atomic::{fence, Ordering},
+    },
     smoltcp::{
         self,
         phy::{self, DeviceCapabilities, Medium},
@@ -238,7 +241,144 @@ impl Device {
         self.mac
     }
 
-    pub fn receive(&mut self) {}
+    pub fn receive(&mut self) {
+        //     RING_IDX rp,cons,req_prod;
+        //     int nr_consumed, more, i, notify;
+        //     int dobreak;
+        let mut rp: u32;
+        let mut cons: u32;
+        let mut req_prod: u32;
+
+        let mut nr_consumed: usize;
+        let mut more: usize;
+        let mut i: usize;
+
+        let mut notify: bool;
+        let mut dobreak: bool;
+
+        //     nr_consumed = 0;
+        nr_consumed = 0;
+
+        loop {
+            // moretodo:
+            //     rp = dev->rx.sring->rsp_prod;
+            //     rmb(); /* Ensure we see queued responses up to 'rp'. */
+            rp = self.rx.sring.rsp_prod;
+            fence(Ordering::SeqCst);
+
+            //     dobreak = 0;
+            dobreak = false;
+
+            //     for (cons = dev->rx.rsp_cons; cons != rp && !dobreak; nr_consumed++, cons++)
+            //     {
+            //         struct net_buffer* buf;
+            //         unsigned char* page;
+            //         int id;
+
+            //         struct netif_rx_response *rx = RING_GET_RESPONSE(&dev->rx, cons);
+
+            //         id = rx->id;
+            //         BUG_ON(id >= NET_RX_RING_SIZE);
+
+            //         buf = &dev->rx_buffers[id];
+            //         page = (unsigned char*)buf->page;
+            //         gnttab_end_access(buf->gref);
+
+            //         if (rx->status > NETIF_RSP_NULL)
+            //         {
+
+            //         dev->netif_rx(page+rx->offset,rx->status);
+            //         }
+            //     }
+
+            cons = self.rx.rsp_cons;
+            loop {
+                if !(cons != rp && !dobreak) {
+                    break;
+                }
+
+                let rx = unsafe { (*self.rx.get(cons as usize)).rsp };
+                let id = rx.id as usize;
+                assert!(id < RING_SIZE);
+
+                let buf = self.rx_buffers[id];
+                grant_table::grant_end(buf.grant_ref);
+
+                log::trace!("received: {} bytes at {:p}", rx.status, unsafe {
+                    buf.page.add(rx.offset as usize)
+                });
+
+                nr_consumed += 1;
+                cons += 1;
+            }
+
+            log::trace!("nr_consumed: {}", nr_consumed);
+
+            //     dev->rx.rsp_cons=cons;
+
+            self.rx.rsp_cons = cons;
+
+            //     RING_FINAL_CHECK_FOR_RESPONSES(&dev->rx,more);
+            //     if(more && !dobreak) goto moretodo;
+
+            let more = self.rx.check_for_responses();
+            if !(more > 0 && !dobreak) {
+                break;
+            }
+        }
+
+        //     req_prod = dev->rx.req_prod_pvt;
+        req_prod = self.rx.req_prod_pvt;
+
+        //     for(i=0; i<nr_consumed; i++)
+        //     {
+        //         int id = xennet_rxidx(req_prod + i);
+        //         netif_rx_request_t *req = RING_GET_REQUEST(&dev->rx, req_prod + i);
+        //         struct net_buffer* buf = &dev->rx_buffers[id];
+        //         void* page = buf->page;
+
+        //         /* We are sure to have free gnttab entries since they got released above */
+        //         buf->gref = req->gref =
+        //             gnttab_grant_access(dev->dom,virt_to_mfn(page),0);
+
+        //         req->id = id;
+        //     }
+
+        for i in 0..nr_consumed {
+            let id = (req_prod as usize + i) & (RING_SIZE - 1);
+            let entry = self.rx.get(i);
+            let mut buf = self.rx_buffers[id];
+
+            let page = buf.page;
+
+            let gref = grant_table::grant_access(
+                self.backend_domain,
+                VirtualAddress(page as usize).into(),
+                false,
+            );
+
+            buf.grant_ref = gref;
+            unsafe { *entry }.req.gref = gref;
+            unsafe { *entry }.req.id = id as u16;
+        }
+
+        fence(Ordering::SeqCst);
+
+        self.rx.req_prod_pvt = req_prod + (nr_consumed) as u32;
+
+        self.rx.push_requests();
+        self.notify();
+
+        log::trace!("done");
+
+        //     wmb();
+
+        //     dev->rx.req_prod_pvt = req_prod + i;
+
+        //     RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&dev->rx, notify);
+        //     if (notify)
+        //         notify_remote_via_evtchn(dev->evtchn);
+    }
 }
 
 fn get_mac() -> EthernetAddress {

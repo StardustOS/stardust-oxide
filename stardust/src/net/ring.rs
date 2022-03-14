@@ -75,6 +75,23 @@ impl<S: RawRing> Ring<S> {
     pub fn set_rsp_event(&mut self, val: u32) {
         self.sring.set_rsp_event(val)
     }
+
+    fn unconsumed_responses(&self) -> u32 {
+        self.sring.rsp_prod() - self.rsp_cons
+    }
+
+    pub fn check_for_responses(&mut self) -> u32 {
+        let todo = self.unconsumed_responses();
+
+        if todo > 0 {
+            return todo;
+        }
+
+        self.set_rsp_event(self.rsp_cons + 1);
+        fence(Ordering::SeqCst);
+
+        self.unconsumed_responses()
+    }
 }
 
 /// Trait for Xen shared ring types
