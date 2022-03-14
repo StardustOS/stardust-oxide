@@ -1,9 +1,8 @@
 //! Stardust Oxide
 
 #![no_std]
-#![feature(alloc_error_handler)]
 #![deny(missing_docs)]
-#![deny(warnings)]
+#![feature(alloc_error_handler)]
 
 extern crate alloc;
 

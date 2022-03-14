@@ -70,11 +70,11 @@ pub fn init() {
 }
 
 /// Associates a value with a path
-pub async fn request(kind: MessageKind, data: &[&[u8]]) -> (MessageHeader, String) {
+pub async fn request(kind: MessageKind, data: &[&[u8]], tx_id: u32) -> (MessageHeader, String) {
     let header = MessageHeader {
         kind,
         request_id: 0,
-        transaction_id: 0,
+        transaction_id: tx_id,
     };
 
     XENBUS.lock().write(header, data);
@@ -196,6 +196,7 @@ unsafe fn copy_from_ring<T: Copy>(ring: &[T], destination: &mut [T], offset: usi
 }
 
 /// State of XenBus connection
+#[derive(Debug)]
 pub enum State {
     /// Initial state of the device on the bus, before either end has been connected
     Unknown,
@@ -231,6 +232,22 @@ impl From<XenbusState> for State {
             xenbus_state_XenbusStateReconfiguring => State::Reconfiguring,
             xenbus_state_XenbusStateReconfigured => State::Reconfigured,
             _ => panic!("Unknown XenBus state during conversion"),
+        }
+    }
+}
+
+impl From<State> for XenbusState {
+    fn from(s: State) -> Self {
+        match s {
+            State::Unknown => xenbus_state_XenbusStateUnknown,
+            State::Initialising => xenbus_state_XenbusStateInitialising,
+            State::InitWait => xenbus_state_XenbusStateInitWait,
+            State::Initialised => xenbus_state_XenbusStateInitialised,
+            State::Connected => xenbus_state_XenbusStateConnected,
+            State::Closing => xenbus_state_XenbusStateClosing,
+            State::Closed => xenbus_state_XenbusStateClosed,
+            State::Reconfiguring => xenbus_state_XenbusStateReconfiguring,
+            State::Reconfigured => xenbus_state_XenbusStateReconfigured,
         }
     }
 }

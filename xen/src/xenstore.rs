@@ -174,8 +174,10 @@ impl XenStore {
 
         self.read_response(&mut buf);
 
-        // remove nul terminator
-        buf.truncate(msg_len - 1);
+        // remove nul terminator if it exists
+        if let Some(0) = buf.last() {
+            buf.truncate(buf.len() - 1);
+        }
 
         // does not reallocate
         String::from_utf8(buf).expect("XenStore value contains invalid UTF-8")
