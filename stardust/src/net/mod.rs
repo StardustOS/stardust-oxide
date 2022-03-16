@@ -1,5 +1,7 @@
 //! Network front-end driver
 
+use xen::time::get_system_time;
+
 use {
     alloc::{collections::BTreeMap, vec, vec::Vec},
     core::{fmt::Write, time::Duration},
@@ -10,7 +12,10 @@ use {
         socket::{TcpSocket, TcpSocketBuffer},
         time::Instant,
     },
-    xen::{platform::time::get_system_time, Delay},
+    xen::{
+        scheduler::{schedule_operation, Command},
+        time, Delay,
+    },
 };
 
 mod phy;
@@ -43,29 +48,23 @@ pub async fn server() {
         log::trace!("{:?}", iface.device().tx);
         log::trace!("{:?}", iface.device().rx);
 
-        Delay::new(Duration::new(0, 100_000_000)).await;
+        match iface.poll(Instant::from_micros((get_system_time() >> 10) as i64)) {
+            Ok(_) => {}
+            Err(e) => {
+                debug!("poll error: {}", e);
+            }
+        }
 
-        iface.device_mut().receive();
+        let socket = iface.get_socket::<TcpSocket>(handle);
+        if !socket.is_open() {
+            socket.listen(80).unwrap();
+        }
 
-        xen::scheduler::schedule_operation(xen::scheduler::Command::Yield);
-
-        // match iface.poll(Instant::from_micros((get_system_time() >> 10) as i64)) {
-        //     Ok(_) => {}
-        //     Err(e) => {
-        //         debug!("poll error: {}", e);
-        //     }
-        // }
-
-        // let socket = iface.get_socket::<TcpSocket>(handle);
-        // if !socket.is_open() {
-        //     socket.listen(80).unwrap();
-        // }
-
-        // if socket.can_send() {
-        //     debug!("tcp:80 send greeting");
-        //     writeln!(socket, "hello").unwrap();
-        //     debug!("tcp:80 close");
-        //     socket.close();
-        // }
+        if socket.can_send() {
+            debug!("tcp:80 send greeting");
+            writeln!(socket, "hello").unwrap();
+            debug!("tcp:80 close");
+            socket.close();
+        }
     }
 }

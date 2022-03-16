@@ -1,8 +1,8 @@
 use {
-    super::ring::{Ring, PAGE_LAYOUT},
-    alloc::{alloc::alloc, format},
+    super::ring::{RawRing, Ring, PAGE_LAYOUT},
+    alloc::{alloc::alloc, format, vec, vec::Vec},
     core::{
-        ptr,
+        ptr::{self, copy_nonoverlapping},
         sync::atomic::{fence, Ordering},
     },
     smoltcp::{
@@ -12,12 +12,13 @@ use {
         wire::EthernetAddress,
     },
     xen::{
-        events::event_channel_op,
+        events::{bind_event_channel, event_channel_op, unmask_event_channel},
         grant_table,
         memory::VirtualAddress,
         xen_sys::{
             self, domid_t, evtchn_alloc_unbound_t, evtchn_port_t, evtchn_send, grant_ref_t,
-            netif_rx_sring, netif_tx_sring, EVTCHNOP_alloc_unbound, EVTCHNOP_send,
+            netif_rx_sring, netif_tx_sring, EVTCHNOP_alloc_unbound, EVTCHNOP_send, NETIF_RSP_ERROR,
+            NETIF_RSP_NULL,
         },
         xenbus::{self, MessageKind},
         xenstore, DOMID_SELF,
@@ -25,6 +26,25 @@ use {
 };
 
 const RING_SIZE: usize = 256;
+
+struct Freelist([usize; RING_SIZE + 1]);
+
+impl Freelist {
+    fn new() -> Self {
+        Self([0; RING_SIZE + 1])
+    }
+
+    fn add(&mut self, id: usize) {
+        self.0[id + 1] = self.0[0];
+        self.0[0] = id;
+    }
+
+    fn get(&mut self) -> usize {
+        let id = self.0[0];
+        self.0[0] = self.0[id + 1];
+        id
+    }
+}
 
 #[derive(Clone, Copy)]
 struct Buffer {
@@ -40,6 +60,7 @@ pub struct Device {
     pub tx: Ring<netif_tx_sring>,
     tx_ring_ref: grant_ref_t,
     tx_buffers: [Buffer; RING_SIZE],
+    tx_freelist: Freelist,
 
     pub rx: Ring<netif_rx_sring>,
     rx_ring_ref: grant_ref_t,
@@ -51,21 +72,33 @@ impl Device {
         // retrieve MAC
         let mac = get_mac();
 
+        let mut tx_buffers = [Buffer {
+            page: ptr::null_mut(),
+            grant_ref: 0,
+        }; RING_SIZE];
+
+        let mut tx_freelist = Freelist::new();
+
+        let mut rx_buffers = [Buffer {
+            page: ptr::null_mut(),
+            grant_ref: 0,
+        }; RING_SIZE];
+
+        for i in 0..RING_SIZE {
+            tx_freelist.add(i);
+            tx_buffers[i].page = ptr::null_mut();
+        }
+
+        for i in 0..RING_SIZE {
+            rx_buffers[i].page = unsafe { alloc(PAGE_LAYOUT) };
+        }
+
         // get domain ID of backend
         let backend_domain = get_backend_domain();
+        log::trace!("backend_domain {}", backend_domain);
 
         // setup event channel
         let event_channel_port = alloc_event_channel(backend_domain);
-
-        let tx_buffers = [Buffer {
-            page: ptr::null_mut(),
-            grant_ref: 0,
-        }; RING_SIZE];
-
-        let rx_buffers = [Buffer {
-            page: ptr::null_mut(),
-            grant_ref: 0,
-        }; RING_SIZE];
 
         let tx = Ring::<netif_tx_sring>::new();
         assert!(tx.size() == RING_SIZE);
@@ -91,13 +124,16 @@ impl Device {
             tx,
             tx_ring_ref,
             tx_buffers,
+            tx_freelist,
             rx,
             rx_ring_ref,
             rx_buffers,
         };
 
-        celf.init_buffers();
+        celf.init_rx_buffers();
         celf.connect().await;
+
+        unmask_event_channel(celf.event_channel_port);
 
         celf
     }
@@ -109,11 +145,7 @@ impl Device {
         event_channel_op(EVTCHNOP_send, &mut event as *mut _ as u64);
     }
 
-    fn init_buffers(&mut self) {
-        for mut buf in self.rx_buffers {
-            unsafe { buf.page = alloc(PAGE_LAYOUT) }
-        }
-
+    fn init_rx_buffers(&mut self) {
         for i in 0..RING_SIZE {
             let mut buf = self.rx_buffers[i];
             let mut req = unsafe { (*self.rx.get(i)).req };
@@ -153,7 +185,7 @@ impl Device {
                 MessageKind::Write,
                 &[
                     b"device/vif/0/tx-ring-ref\0",
-                    format!("{}\0", self.tx_ring_ref).as_bytes(),
+                    format!("{}", self.tx_ring_ref).as_bytes(),
                 ],
                 txn_id,
             )
@@ -167,7 +199,7 @@ impl Device {
                 MessageKind::Write,
                 &[
                     b"device/vif/0/rx-ring-ref\0",
-                    format!("{}\0", self.rx_ring_ref).as_bytes(),
+                    format!("{}", self.rx_ring_ref).as_bytes(),
                 ],
                 txn_id,
             )
@@ -210,11 +242,7 @@ impl Device {
                 MessageKind::Write,
                 &[
                     b"device/vif/0/state\0",
-                    format!(
-                        "{}\0",
-                        xen_sys::xenbus_state::from(xenbus::State::Connected)
-                    )
-                    .as_bytes(),
+                    format!("{}", xen_sys::xenbus_state::from(xenbus::State::Connected)).as_bytes(),
                 ],
                 txn_id,
             )
@@ -231,23 +259,30 @@ impl Device {
         log::trace!("{:?}", rsp);
 
         log::trace!(
-            "backend: {:?}\nmac: {:?}",
-            xenbus::request(MessageKind::Read, &[b"device/vif/0/backend\0"], 0).await,
-            xenbus::request(MessageKind::Read, &[b"device/vif/0/mac\0"], 0).await,
+            "backend: {:?}",
+            xenbus::request(MessageKind::Read, &[b"device/vif/0/backend\0"], 0)
+                .await
+                .1,
         );
+        log::trace!(
+            "mac: {:?}",
+            xenbus::request(MessageKind::Read, &[b"device/vif/0/mac\0"], 0)
+                .await
+                .1,
+        )
     }
 
     pub fn mac(&self) -> EthernetAddress {
         self.mac
     }
 
-    pub fn receive(&mut self) {
+    pub fn rx(&mut self) -> Option<Vec<u8>> {
         //     RING_IDX rp,cons,req_prod;
         //     int nr_consumed, more, i, notify;
         //     int dobreak;
         let mut rp: u32;
         let mut cons: u32;
-        let mut req_prod: u32;
+        let req_prod: u32;
 
         let mut nr_consumed: usize;
         let mut more: usize;
@@ -255,6 +290,8 @@ impl Device {
 
         let mut notify: bool;
         let mut dobreak: bool;
+
+        let mut res = None;
 
         //     nr_consumed = 0;
         nr_consumed = 0;
@@ -307,6 +344,18 @@ impl Device {
                 log::trace!("received: {} bytes at {:p}", rx.status, unsafe {
                     buf.page.add(rx.offset as usize)
                 });
+
+                // PROCESS DATA HERE
+                let mut vec = vec![0; rx.status as usize];
+                unsafe {
+                    copy_nonoverlapping(
+                        buf.page.add(rx.offset as usize),
+                        vec.as_mut_ptr(),
+                        rx.status as usize,
+                    )
+                };
+                res = Some(vec);
+                dobreak = true;
 
                 nr_consumed += 1;
                 cons += 1;
@@ -369,7 +418,9 @@ impl Device {
         self.rx.push_requests();
         self.notify();
 
-        log::trace!("done");
+        log::trace!("rx done");
+
+        res
 
         //     wmb();
 
@@ -378,6 +429,118 @@ impl Device {
         //     RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&dev->rx, notify);
         //     if (notify)
         //         notify_remote_via_evtchn(dev->evtchn);
+    }
+
+    pub fn tx(&mut self, data: &[u8]) {
+        let id = self.tx_freelist.get();
+
+        // buf = &dev->tx_buffers[id];
+        let mut buf = self.tx_buffers[id];
+
+        // if (!page)
+        // page = buf->page = (char*) alloc_page();
+        if buf.page.is_null() {
+            buf.page = unsafe { alloc(PAGE_LAYOUT) };
+        }
+
+        let i = self.tx.req_prod_pvt;
+        let mut tx = unsafe { (*self.tx.get(i as usize)).req };
+        // i = dev->tx.req_prod_pvt;
+        // tx = RING_GET_REQUEST(&dev->tx, i);
+
+        // memcpy(page,data,len);
+        unsafe { copy_nonoverlapping(data.as_ptr(), buf.page, data.len()) };
+
+        // buf->gref =
+        //     tx->gref = gnttab_grant_access(dev->dom,virt_to_mfn(page),1);
+        let gref = grant_table::grant_access(
+            self.backend_domain,
+            VirtualAddress(buf.page as usize).into(),
+            true,
+        );
+        buf.grant_ref = gref;
+        tx.gref = gref;
+
+        // tx->offset=0;
+        // tx->size = len;
+        // tx->flags=0;
+        // tx->id = id;
+        // dev->tx.req_prod_pvt = i + 1;
+        tx.offset = 0;
+        tx.size = data.len() as u16;
+        tx.flags = 0;
+        tx.id = id as u16;
+
+        self.tx.req_prod_pvt = i + 1;
+
+        // wmb();
+        fence(Ordering::SeqCst);
+
+        // RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&dev->tx, notify);
+        self.tx.push_requests();
+
+        // if(notify) notify_remote_via_evtchn(dev->evtchn);
+        self.notify();
+
+        self.process_transmissions();
+    }
+
+    pub fn process_transmissions(&mut self) {
+        let mut cons: u32;
+        let mut prod: u32;
+
+        loop {
+            prod = self.tx.sring.rsp_prod();
+            fence(Ordering::SeqCst);
+
+            cons = self.tx.rsp_cons;
+            loop {
+                if cons == prod {
+                    break;
+                }
+
+                //         txrsp = RING_GET_RESPONSE(&dev->tx, cons);
+                //     if (txrsp->status == NETIF_RSP_NULL)
+                //         continue;
+
+                //     if (txrsp->status == NETIF_RSP_ERROR)
+                //         printk("packet error\n");
+
+                //     id  = txrsp->id;
+                //     BUG_ON(id >= NET_TX_RING_SIZE);
+                //     buf = &dev->tx_buffers[id];
+                //     gnttab_end_access(buf->gref);
+                //     buf->gref=GRANT_INVALID_REF;
+
+                // add_id_to_freelist(id,dev->tx_freelist);
+                // up(&dev->tx_sem);
+
+                let txrsp = unsafe { (*self.tx.get(cons as usize)).rsp };
+
+                if txrsp.status == NETIF_RSP_NULL as i16 {
+                    continue;
+                }
+
+                if txrsp.status == NETIF_RSP_ERROR as i16 {
+                    log::trace!("tx packet error");
+                }
+
+                log::trace!("packet status: {}", txrsp.status);
+
+                let id = txrsp.id as usize;
+                let mut buf = self.tx_buffers[id];
+                grant_table::grant_end(buf.grant_ref);
+                buf.grant_ref = 0;
+
+                self.tx_freelist.add(id);
+
+                cons += 1;
+            }
+
+            if !((cons == prod) && (prod != self.tx.sring.rsp_prod())) {
+                break;
+            }
+        }
     }
 }
 
@@ -411,28 +574,25 @@ fn alloc_event_channel(domain: domid_t) -> evtchn_port_t {
 
     event_channel_op(EVTCHNOP_alloc_unbound, &mut op as *mut _ as u64);
 
-    // bind_event_channel(
-    //     op.port
-    //         .try_into()
-    //         .expect("failed to convert evtchn_port_t to usize"),
-    //     |_, _| trace!("net event channel!"),
-    //     0,
-    // );
+    log::trace!("net event channel: {}", op.port);
+
+    bind_event_channel(op.port, |_, _, _| log::trace!("net event channel!"), 0);
 
     op.port
 }
 
 impl<'a> phy::Device<'a> for Device {
-    type RxToken = PhyRxToken<'a>;
+    type RxToken = PhyRxToken;
 
     type TxToken = PhyTxToken<'a>;
 
     fn receive(&'a mut self) -> Option<(Self::RxToken, Self::TxToken)> {
-        Some((PhyRxToken(&mut self.rx), PhyTxToken(&mut self.tx)))
+        None
+        // Some((PhyRxToken(&mut self.rx), PhyTxToken(&mut self.tx)))
     }
 
     fn transmit(&'a mut self) -> Option<Self::TxToken> {
-        Some(PhyTxToken(&mut self.tx))
+        Some(PhyTxToken(self))
     }
 
     fn capabilities(&self) -> DeviceCapabilities {
@@ -444,30 +604,32 @@ impl<'a> phy::Device<'a> for Device {
     }
 }
 
-pub struct PhyRxToken<'a>(&'a mut Ring<netif_rx_sring>);
+pub struct PhyRxToken(Vec<u8>);
 
-impl<'a> phy::RxToken for PhyRxToken<'a> {
+impl phy::RxToken for PhyRxToken {
     fn consume<R, F>(mut self, _timestamp: Instant, f: F) -> smoltcp::Result<R>
     where
         F: FnOnce(&mut [u8]) -> smoltcp::Result<R>,
     {
-        let mut buf = alloc::vec![];
-        let result = f(&mut buf);
-        log::trace!("rx: {:?}", buf);
+        let result = f(&mut self.0);
+        log::trace!("rx: {:?}", self.0);
         result
     }
 }
 
-pub struct PhyTxToken<'a>(&'a mut Ring<netif_tx_sring>);
+pub struct PhyTxToken<'a>(&'a mut Device);
 
 impl<'a> phy::TxToken for PhyTxToken<'a> {
-    fn consume<R, F>(self, _timestamp: Instant, len: usize, f: F) -> smoltcp::Result<R>
+    fn consume<R, F>(self, _timestamp: Instant, _len: usize, f: F) -> smoltcp::Result<R>
     where
         F: FnOnce(&mut [u8]) -> smoltcp::Result<R>,
     {
         let mut buf = alloc::vec![0; 1536];
         let result = f(&mut buf);
         log::trace!("tx: {:?}", buf);
-        todo!()
+
+        self.0.tx(&buf);
+
+        result
     }
 }

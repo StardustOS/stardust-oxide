@@ -1,14 +1,104 @@
 //! Trap handlers
 
-use xen::{
-    dbg,
-    trap::{set_trap_table, TrapInfo},
-    xen_sys::FLAT_KERNEL_CS,
+use {
+    core::{arch::asm, intrinsics::atomic_xchg},
+    log::trace,
+    xen::{
+        dbg, events,
+        events::{clear_event_channel, do_event},
+        hypercall,
+        trap::{set_trap_table, TrapInfo},
+        xen_sys::{__HYPERVISOR_set_callbacks, FLAT_KERNEL_CS},
+        SHARED_INFO,
+    },
 };
+
+extern "C" {
+    fn divide_error();
+    fn debug();
+    fn int3();
+    fn overflow();
+    fn bounds();
+    fn invalid_op();
+    fn device_not_available();
+    fn coprocessor_segment_overrun();
+    fn invalid_TSS();
+    fn segment_not_present();
+    fn stack_segment();
+    fn general_protection();
+    fn page_fault();
+    fn spurious_interrupt_bug();
+    fn coprocessor_error();
+    fn alignment_check();
+    fn simd_coprocessor_error();
+    fn hypervisor_callback();
+    fn failsafe_callback();
+}
+
+fn active_event_channels(idx: usize) -> u64 {
+    let shared_info = unsafe { *SHARED_INFO };
+    let pending = shared_info.evtchn_pending[idx];
+    let mask = !shared_info.evtchn_mask[idx];
+
+    pending & mask
+}
+
+#[no_mangle]
+/// Handler for hypervisor callback trap
+pub extern "C" fn do_hypervisor_callback() {
+    //   trace!("hypervisor callback");
+
+    let shared_info = unsafe { *SHARED_INFO };
+    let mut vcpu_info = shared_info.vcpu_info[0];
+
+    vcpu_info.evtchn_upcall_pending = 0;
+
+    let mut pending_selector = unsafe { atomic_xchg(&mut vcpu_info.evtchn_pending_sel, 0) };
+
+    while pending_selector != 0 {
+        //trace!("pending_selector: {}", pending_selector);
+
+        // get the first set bit of the selector and clear it
+        let next_event_offset = pending_selector.trailing_zeros();
+        pending_selector &= !(1 << next_event_offset);
+
+        //trace!("next_event_offset: {}", next_event_offset);
+
+        loop {
+            // get first waiting event
+            let event = active_event_channels(next_event_offset as usize);
+            // trace!("event: {}", event);
+            if event == 0 {
+                break;
+            }
+
+            let event_offset = event.trailing_zeros();
+            // trace!("event_offset: {}", event_offset);
+
+            let port = ((pending_selector as u32) << 5) + event_offset;
+
+            // trace!("port: {}", port);
+
+            do_event(port);
+
+            clear_event_channel(port);
+        }
+    }
+}
 
 /// Registers the trap handlers
 pub fn init() {
     set_trap_table(&TRAP_TABLE);
+
+    unsafe {
+        hypercall!(
+            __HYPERVISOR_set_callbacks,
+            hypervisor_callback as u64,
+            failsafe_callback as u64,
+            0u64
+        )
+        .expect("failed to set callbacks")
+    };
 }
 
 static TRAP_TABLE: [TrapInfo; 18] = [
@@ -122,26 +212,6 @@ static TRAP_TABLE: [TrapInfo; 18] = [
     },
 ];
 
-extern "C" {
-    fn divide_error();
-    fn debug();
-    fn int3();
-    fn overflow();
-    fn bounds();
-    fn invalid_op();
-    fn device_not_available();
-    fn coprocessor_segment_overrun();
-    fn invalid_TSS();
-    fn segment_not_present();
-    fn stack_segment();
-    fn general_protection();
-    fn page_fault();
-    fn spurious_interrupt_bug();
-    fn coprocessor_error();
-    fn alignment_check();
-    fn simd_coprocessor_error();
-}
-
 #[no_mangle]
 /// Handler for divide error trap
 pub extern "C" fn do_divide_error() {
@@ -241,11 +311,5 @@ pub extern "C" fn do_alignment_check() {
 #[no_mangle]
 /// Handler for SIMD coprocessor trap
 pub extern "C" fn do_simd_coprocessor_error() {
-    dbg!()
-}
-
-#[no_mangle]
-/// Handler for hypervisor callback trap
-pub extern "C" fn do_hypervisor_callback() {
     dbg!()
 }

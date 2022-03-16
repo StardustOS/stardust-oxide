@@ -55,6 +55,8 @@ impl GrantTable {
             celf.put_free_entry(i as u32);
         }
 
+        log::trace!("grant table mapped at {:p}", table);
+
         celf
     }
 
@@ -93,6 +95,14 @@ impl GrantTable {
             entry.flags = (GTF_permit_access | if readonly { GTF_readonly } else { 0 })
                 .try_into()
                 .expect("Failed to convert u32 to u16");
+
+            log::trace!(
+                "granting access {} {} {} {}",
+                domain,
+                frame.0,
+                entry.flags,
+                reference
+            );
         }
 
         reference

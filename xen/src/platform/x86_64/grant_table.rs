@@ -21,12 +21,11 @@ pub fn init<const NUM_GRANT_FRAMES: usize>() -> Result<*mut grant_entry_t, Error
 
     setup_table(DOMID_SELF, &mut frames)?;
 
-    let va = unsafe {
-        alloc(
-            Layout::from_size_align(PAGE_SIZE * NUM_GRANT_FRAMES, PAGE_SIZE)
-                .expect("Failed to construct Layout"),
-        )
-    };
+    log::trace!("setup table {:p}", frames.as_ptr());
+
+    //map_frames_ex(frames, nr_grant_frames, 1, 0, 1, DOMID_SELF, NULL, L1_PROT)
+
+    let va = 0x100000000000 as *mut u8;
 
     let mut mmu_updates = [mmu_update_t { ptr: 0, val: 0 }; NUM_GRANT_FRAMES];
 

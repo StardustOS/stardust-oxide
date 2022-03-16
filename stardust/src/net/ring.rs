@@ -21,11 +21,11 @@ pub struct Ring<S: 'static + RawRing> {
     pub sring: &'static mut S,
 }
 
-impl<S: RawRing> Drop for Ring<S> {
-    fn drop(&mut self) {
-        unsafe { dealloc(self.sring as *mut _ as *mut u8, PAGE_LAYOUT) }
-    }
-}
+// impl<S: RawRing> Drop for Ring<S> {
+//     fn drop(&mut self) {
+//         unsafe { dealloc(self.sring as *mut _ as *mut u8, PAGE_LAYOUT) }
+//     }
+// }
 
 impl<S: RawRing> Debug for Ring<S> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
