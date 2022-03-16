@@ -4,7 +4,7 @@ use {
     crate::{
         hypercall,
         platform::util::{init_events, synch_clear_bit, synch_set_bit},
-        println, SHARED_INFO, START_INFO,
+        println, SHARED_INFO,
     },
     xen_sys::{
         __HYPERVISOR_event_channel_op, evtchn_bind_virq_t, evtchn_port_t, EVTCHNOP_bind_virq,
@@ -42,18 +42,10 @@ pub fn init() {
     init_events();
 
     unsafe { *SHARED_INFO }.vcpu_info[0].evtchn_upcall_mask = 0;
-
-    // bind_event_channel(
-    //     unsafe { (*START_INFO).console.domU.evtchn },
-    //     |_, _, _| log::trace!("console event!"),
-    //     0,
-    // )
 }
 
 /// Execute event on supplied channel port
 pub fn do_event(port: evtchn_port_t) {
-    //log::trace!("event: {}", port);
-
     unsafe {
         EVENT_ACTIONS[port as usize].count += 1;
         (EVENT_ACTIONS[port as usize].handler)(port, core::ptr::null_mut(), core::ptr::null_mut())
@@ -81,7 +73,7 @@ pub fn bind_event_channel(
         EVENT_ACTIONS[idx].handler = handler;
     }
 
-    // unmask_event_channel(port);
+    unmask_event_channel(port);
 }
 
 /// Bind a handler to a VIRQ

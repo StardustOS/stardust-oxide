@@ -17,7 +17,6 @@ use {
         scheduler::{schedule_operation, Command, ShutdownReason},
         sections::{edata, end, erodata, etext, text_start},
         time,
-        time::{block, get_system_time},
         xen_sys::start_info_t,
         xenbus, xenstore,
     },

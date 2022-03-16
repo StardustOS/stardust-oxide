@@ -22,10 +22,10 @@ pub mod memory;
 pub mod platform;
 pub mod scheduler;
 pub mod sections;
+pub mod time;
 pub mod trap;
 pub mod xenbus;
 pub mod xenstore;
-pub mod time;
 
 /// Domain ID of this domain
 pub const DOMID_SELF: domid_t = 0x7FF0;

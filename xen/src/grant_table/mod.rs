@@ -3,21 +3,23 @@
 //! "The grant table mechanism [..] allows memory pages to be transferred or shared between virtual machines"
 
 use {
-    crate::platform::{self, consts::PAGE_SIZE},
+    crate::{
+        memory::MachineFrameNumber,
+        platform::{self, consts::PAGE_SIZE},
+    },
     core::{
-        convert::{TryFrom, TryInto},
+        convert::TryInto,
         mem::size_of,
         sync::atomic::{fence, Ordering},
     },
     lazy_static::lazy_static,
     spin::Mutex,
-    xen_sys::{grant_entry_t, grant_ref_t, GTF_accept_transfer, GTF_permit_access, GTF_readonly},
+    xen_sys::{
+        domid_t, grant_entry_t, grant_ref_t, GTF_accept_transfer, GTF_permit_access, GTF_readonly,
+    },
 };
 
 pub use error::{Error, GrantStatusError};
-use xen_sys::domid_t;
-
-use crate::memory::MachineFrameNumber;
 
 mod error;
 pub mod operations;
@@ -62,15 +64,17 @@ impl GrantTable {
 
     fn put_free_entry(&mut self, reference: grant_ref_t) {
         self.list[reference as usize] = self.list[0];
-        self.list[0] = reference
-            .try_into()
-            .expect("Failed to convert usize to grant_ref_t");
+        self.list[0] = reference;
     }
 
     fn get_free_entry(&mut self) -> grant_ref_t {
         let reference = self.list[0];
-        self.list[0] =
-            self.list[usize::try_from(reference).expect("Failed to convert u32 to usize")];
+        self.list[0] = self.list[reference as usize];
+
+        assert!(
+            reference as usize >= NUM_RESERVED_ENTRIES && (reference as usize) < NUM_GRANT_ENTRIES
+        );
+
         reference
     }
 
@@ -81,28 +85,21 @@ impl GrantTable {
         readonly: bool,
     ) -> grant_ref_t {
         let reference = self.get_free_entry();
+
         let idx: isize = reference
             .try_into()
             .expect("Failed to convert u32 to usize");
 
         unsafe {
-            let mut entry = *(self.table.offset(idx));
-            entry.frame = frame.0.try_into().expect("Failed to convert usize to u32");
-            entry.domid = domain;
+            let mut entry = self.table.offset(idx);
+            (*entry).frame = frame.0.try_into().expect("Failed to convert usize to u32");
+            (*entry).domid = domain;
 
             fence(Ordering::SeqCst);
 
-            entry.flags = (GTF_permit_access | if readonly { GTF_readonly } else { 0 })
+            (*entry).flags = (GTF_permit_access | if readonly { GTF_readonly } else { 0 })
                 .try_into()
                 .expect("Failed to convert u32 to u16");
-
-            log::trace!(
-                "granting access {} {} {} {}",
-                domain,
-                frame.0,
-                entry.flags,
-                reference
-            );
         }
 
         reference

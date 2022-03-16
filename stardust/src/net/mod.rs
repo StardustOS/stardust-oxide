@@ -1,21 +1,17 @@
 //! Network front-end driver
 
-use xen::time::get_system_time;
-
 use {
     alloc::{collections::BTreeMap, vec, vec::Vec},
-    core::{fmt::Write, time::Duration},
+    core::fmt::Write,
     log::debug,
     phy::Device,
     smoltcp::{
-        iface::{InterfaceBuilder, NeighborCache},
+        iface::{InterfaceBuilder, NeighborCache, Routes},
         socket::{TcpSocket, TcpSocketBuffer},
         time::Instant,
+        wire::{IpCidr, Ipv4Address},
     },
-    xen::{
-        scheduler::{schedule_operation, Command},
-        time, Delay,
-    },
+    xen::time::get_system_time,
 };
 
 mod phy;
@@ -27,10 +23,15 @@ pub async fn server() {
 
     let neighbor_cache = NeighborCache::new(BTreeMap::new());
 
+    let ip_addrs = [IpCidr::new(Ipv4Address::new(192, 168, 1, 2).into(), 0)];
+    let mut routes_storage = [None; 1];
+    let routes = Routes::new(&mut routes_storage[..]);
+
     let mut iface = InterfaceBuilder::new(phy, Vec::new())
         .hardware_addr(mac.into())
         .neighbor_cache(neighbor_cache)
-        .any_ip(true)
+        .ip_addrs(ip_addrs)
+        .routes(routes)
         .finalize();
 
     let mut rx_buffer = vec![0; 2048];
@@ -40,14 +41,11 @@ pub async fn server() {
         TcpSocketBuffer::new(&mut tx_buffer[..]),
     );
 
-    let handle = iface.add_socket(socket);
+    let tcp_handle = iface.add_socket(socket);
 
     debug!("starting TCP server");
 
     loop {
-        log::trace!("{:?}", iface.device().tx);
-        log::trace!("{:?}", iface.device().rx);
-
         match iface.poll(Instant::from_micros((get_system_time() >> 10) as i64)) {
             Ok(_) => {}
             Err(e) => {
@@ -55,7 +53,7 @@ pub async fn server() {
             }
         }
 
-        let socket = iface.get_socket::<TcpSocket>(handle);
+        let socket = iface.get_socket::<TcpSocket>(tcp_handle);
         if !socket.is_open() {
             socket.listen(80).unwrap();
         }

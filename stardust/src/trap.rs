@@ -1,10 +1,9 @@
 //! Trap handlers
 
 use {
-    core::{arch::asm, intrinsics::atomic_xchg},
-    log::trace,
+    core::intrinsics::atomic_xchg,
     xen::{
-        dbg, events,
+        dbg,
         events::{clear_event_channel, do_event},
         hypercall,
         trap::{set_trap_table, TrapInfo},
@@ -46,8 +45,6 @@ fn active_event_channels(idx: usize) -> u64 {
 #[no_mangle]
 /// Handler for hypervisor callback trap
 pub extern "C" fn do_hypervisor_callback() {
-    //   trace!("hypervisor callback");
-
     let shared_info = unsafe { *SHARED_INFO };
     let mut vcpu_info = shared_info.vcpu_info[0];
 
@@ -56,28 +53,21 @@ pub extern "C" fn do_hypervisor_callback() {
     let mut pending_selector = unsafe { atomic_xchg(&mut vcpu_info.evtchn_pending_sel, 0) };
 
     while pending_selector != 0 {
-        //trace!("pending_selector: {}", pending_selector);
-
         // get the first set bit of the selector and clear it
         let next_event_offset = pending_selector.trailing_zeros();
         pending_selector &= !(1 << next_event_offset);
 
-        //trace!("next_event_offset: {}", next_event_offset);
-
         loop {
             // get first waiting event
             let event = active_event_channels(next_event_offset as usize);
-            // trace!("event: {}", event);
+
             if event == 0 {
                 break;
             }
 
             let event_offset = event.trailing_zeros();
-            // trace!("event_offset: {}", event_offset);
 
             let port = ((pending_selector as u32) << 5) + event_offset;
-
-            // trace!("port: {}", port);
 
             do_event(port);
 

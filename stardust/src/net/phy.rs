@@ -12,13 +12,13 @@ use {
         wire::EthernetAddress,
     },
     xen::{
-        events::{bind_event_channel, event_channel_op, unmask_event_channel},
+        events::{bind_event_channel, event_channel_op},
         grant_table,
-        memory::VirtualAddress,
+        memory::{MachineFrameNumber, VirtualAddress},
         xen_sys::{
             self, domid_t, evtchn_alloc_unbound_t, evtchn_port_t, evtchn_send, grant_ref_t,
-            netif_rx_sring, netif_tx_sring, EVTCHNOP_alloc_unbound, EVTCHNOP_send, NETIF_RSP_ERROR,
-            NETIF_RSP_NULL,
+            netif_rx_request, netif_rx_sring, netif_tx_request, netif_tx_sring,
+            EVTCHNOP_alloc_unbound, EVTCHNOP_send, NETIF_RSP_ERROR, NETIF_RSP_NULL,
         },
         xenbus::{self, MessageKind},
         xenstore, DOMID_SELF,
@@ -46,7 +46,7 @@ impl Freelist {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Buffer {
     page: *mut u8,
     grant_ref: grant_ref_t,
@@ -106,16 +106,14 @@ impl Device {
         let rx = Ring::<netif_rx_sring>::new();
         assert!(rx.size() == RING_SIZE);
 
-        let tx_ring_ref = grant_table::grant_access(
-            backend_domain,
-            VirtualAddress(tx.sring as *mut _ as usize).into(),
-            false,
-        );
-        let rx_ring_ref = grant_table::grant_access(
-            backend_domain,
-            VirtualAddress(rx.sring as *mut _ as usize).into(),
-            false,
-        );
+        let txs = MachineFrameNumber::from(VirtualAddress(tx.sring as *mut _ as usize));
+        let rxs = MachineFrameNumber::from(VirtualAddress(rx.sring as *mut _ as usize));
+
+        log::trace!("txs {:p} rxs {:p}", tx.sring, rx.sring);
+        log::trace!("txs {:x} rxs {:x}", txs.0, rxs.0);
+
+        let tx_ring_ref = grant_table::grant_access(0, txs, false);
+        let rx_ring_ref = grant_table::grant_access(0, rxs, false);
 
         let mut celf = Self {
             mac,
@@ -131,9 +129,8 @@ impl Device {
         };
 
         celf.init_rx_buffers();
-        celf.connect().await;
 
-        unmask_event_channel(celf.event_channel_port);
+        celf.connect().await;
 
         celf
     }
@@ -147,26 +144,34 @@ impl Device {
 
     fn init_rx_buffers(&mut self) {
         for i in 0..RING_SIZE {
-            let mut buf = self.rx_buffers[i];
-            let mut req = unsafe { (*self.rx.get(i)).req };
-
             let gref = grant_table::grant_access(
                 self.backend_domain,
-                VirtualAddress(buf.page as usize).into(),
+                VirtualAddress(self.rx_buffers[i].page as usize).into(),
                 false,
             );
 
-            buf.grant_ref = gref;
+            self.rx_buffers[i].grant_ref = gref;
 
-            req.gref = gref;
-            req.id = i as u16;
+            unsafe {
+                (*(self.rx.get(i) as *mut netif_rx_request)).gref = gref;
+                (*(self.rx.get(i) as *mut netif_rx_request)).id = i as u16;
+            }
+
+            log::trace!("{:?}", unsafe {
+                *(self.rx.get(i) as *mut netif_rx_request)
+            });
+        }
+
+        for i in 0..RING_SIZE {
+            log::trace!("init rx buffers {:?}", self.rx_buffers[i]);
+            log::trace!("init rx_req {:?}", unsafe { (*self.rx.get(i)).req });
         }
 
         self.rx.req_prod_pvt = RING_SIZE as u32;
 
-        self.rx.push_requests();
-
-        self.notify();
+        if self.rx.push_requests() {
+            self.notify();
+        }
 
         self.rx.set_rsp_event(self.rx.rsp_cons + 1);
     }
@@ -277,56 +282,23 @@ impl Device {
     }
 
     pub fn rx(&mut self) -> Option<Vec<u8>> {
-        //     RING_IDX rp,cons,req_prod;
-        //     int nr_consumed, more, i, notify;
-        //     int dobreak;
         let mut rp: u32;
         let mut cons: u32;
         let req_prod: u32;
 
         let mut nr_consumed: usize;
-        let mut more: usize;
-        let mut i: usize;
 
-        let mut notify: bool;
         let mut dobreak: bool;
 
         let mut res = None;
 
-        //     nr_consumed = 0;
         nr_consumed = 0;
 
         loop {
-            // moretodo:
-            //     rp = dev->rx.sring->rsp_prod;
-            //     rmb(); /* Ensure we see queued responses up to 'rp'. */
             rp = self.rx.sring.rsp_prod;
             fence(Ordering::SeqCst);
 
-            //     dobreak = 0;
             dobreak = false;
-
-            //     for (cons = dev->rx.rsp_cons; cons != rp && !dobreak; nr_consumed++, cons++)
-            //     {
-            //         struct net_buffer* buf;
-            //         unsigned char* page;
-            //         int id;
-
-            //         struct netif_rx_response *rx = RING_GET_RESPONSE(&dev->rx, cons);
-
-            //         id = rx->id;
-            //         BUG_ON(id >= NET_RX_RING_SIZE);
-
-            //         buf = &dev->rx_buffers[id];
-            //         page = (unsigned char*)buf->page;
-            //         gnttab_end_access(buf->gref);
-
-            //         if (rx->status > NETIF_RSP_NULL)
-            //         {
-
-            //         dev->netif_rx(page+rx->offset,rx->status);
-            //         }
-            //     }
 
             cons = self.rx.rsp_cons;
             loop {
@@ -334,26 +306,32 @@ impl Device {
                     break;
                 }
 
+                log::trace!("cons: {}", cons);
+
                 let rx = unsafe { (*self.rx.get(cons as usize)).rsp };
+
+                log::trace!("rx_response {:?}", rx);
+
                 let id = rx.id as usize;
                 assert!(id < RING_SIZE);
 
-                let buf = self.rx_buffers[id];
-                grant_table::grant_end(buf.grant_ref);
+                let page = self.rx_buffers[id].page;
+                grant_table::grant_end(self.rx_buffers[id].grant_ref);
 
                 log::trace!("received: {} bytes at {:p}", rx.status, unsafe {
-                    buf.page.add(rx.offset as usize)
+                    page.add(rx.offset as usize)
                 });
 
                 // PROCESS DATA HERE
                 let mut vec = vec![0; rx.status as usize];
                 unsafe {
                     copy_nonoverlapping(
-                        buf.page.add(rx.offset as usize),
+                        page.add(rx.offset as usize),
                         vec.as_mut_ptr(),
                         rx.status as usize,
                     )
                 };
+
                 res = Some(vec);
                 dobreak = true;
 
@@ -361,14 +339,7 @@ impl Device {
                 cons += 1;
             }
 
-            log::trace!("nr_consumed: {}", nr_consumed);
-
-            //     dev->rx.rsp_cons=cons;
-
             self.rx.rsp_cons = cons;
-
-            //     RING_FINAL_CHECK_FOR_RESPONSES(&dev->rx,more);
-            //     if(more && !dobreak) goto moretodo;
 
             let more = self.rx.check_for_responses();
             if !(more > 0 && !dobreak) {
@@ -376,29 +347,11 @@ impl Device {
             }
         }
 
-        //     req_prod = dev->rx.req_prod_pvt;
         req_prod = self.rx.req_prod_pvt;
-
-        //     for(i=0; i<nr_consumed; i++)
-        //     {
-        //         int id = xennet_rxidx(req_prod + i);
-        //         netif_rx_request_t *req = RING_GET_REQUEST(&dev->rx, req_prod + i);
-        //         struct net_buffer* buf = &dev->rx_buffers[id];
-        //         void* page = buf->page;
-
-        //         /* We are sure to have free gnttab entries since they got released above */
-        //         buf->gref = req->gref =
-        //             gnttab_grant_access(dev->dom,virt_to_mfn(page),0);
-
-        //         req->id = id;
-        //     }
 
         for i in 0..nr_consumed {
             let id = (req_prod as usize + i) & (RING_SIZE - 1);
-            let entry = self.rx.get(i);
-            let mut buf = self.rx_buffers[id];
-
-            let page = buf.page;
+            let page = self.rx_buffers[id].page;
 
             let gref = grant_table::grant_access(
                 self.backend_domain,
@@ -406,80 +359,74 @@ impl Device {
                 false,
             );
 
-            buf.grant_ref = gref;
-            unsafe { *entry }.req.gref = gref;
-            unsafe { *entry }.req.id = id as u16;
+            log::trace!("id: {}, page: {:p}, gref: {}", id, page, gref);
+
+            self.rx_buffers[id].grant_ref = gref;
+
+            unsafe {
+                (*(self.rx.get(i) as *mut netif_rx_request)).gref = gref;
+                (*(self.rx.get(i) as *mut netif_rx_request)).id = i as u16;
+            }
+
+            log::trace!("rx_req {:?}", unsafe { (*self.rx.get(i as usize)).req });
         }
 
         fence(Ordering::SeqCst);
 
         self.rx.req_prod_pvt = req_prod + (nr_consumed) as u32;
 
-        self.rx.push_requests();
-        self.notify();
-
-        log::trace!("rx done");
+        if self.rx.push_requests() {
+            self.notify();
+        }
 
         res
-
-        //     wmb();
-
-        //     dev->rx.req_prod_pvt = req_prod + i;
-
-        //     RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&dev->rx, notify);
-        //     if (notify)
-        //         notify_remote_via_evtchn(dev->evtchn);
     }
 
     pub fn tx(&mut self, data: &[u8]) {
         let id = self.tx_freelist.get();
 
-        // buf = &dev->tx_buffers[id];
-        let mut buf = self.tx_buffers[id];
+        log::trace!("tx id {}", id);
 
-        // if (!page)
-        // page = buf->page = (char*) alloc_page();
-        if buf.page.is_null() {
-            buf.page = unsafe { alloc(PAGE_LAYOUT) };
+        if self.tx_buffers[id].page.is_null() {
+            self.tx_buffers[id].page = unsafe { alloc(PAGE_LAYOUT) };
         }
 
+        log::trace!("tx buffers {:?}", self.tx_buffers[id]);
+
         let i = self.tx.req_prod_pvt;
-        let mut tx = unsafe { (*self.tx.get(i as usize)).req };
-        // i = dev->tx.req_prod_pvt;
-        // tx = RING_GET_REQUEST(&dev->tx, i);
 
-        // memcpy(page,data,len);
-        unsafe { copy_nonoverlapping(data.as_ptr(), buf.page, data.len()) };
+        log::trace!("tx i {}", i);
 
-        // buf->gref =
-        //     tx->gref = gnttab_grant_access(dev->dom,virt_to_mfn(page),1);
+        unsafe { copy_nonoverlapping(data.as_ptr(), self.tx_buffers[id].page, data.len()) };
+
         let gref = grant_table::grant_access(
             self.backend_domain,
-            VirtualAddress(buf.page as usize).into(),
+            VirtualAddress(self.tx_buffers[id].page as usize).into(),
             true,
         );
-        buf.grant_ref = gref;
-        tx.gref = gref;
 
-        // tx->offset=0;
-        // tx->size = len;
-        // tx->flags=0;
-        // tx->id = id;
-        // dev->tx.req_prod_pvt = i + 1;
-        tx.offset = 0;
-        tx.size = data.len() as u16;
-        tx.flags = 0;
-        tx.id = id as u16;
+        self.tx_buffers[id].grant_ref = gref;
+
+        log::trace!("tx buffers {:?} gref {}", self.tx_buffers[id], gref);
+
+        unsafe {
+            (*(self.tx.get(i as usize) as *mut netif_tx_request)).gref = gref;
+            (*(self.tx.get(i as usize) as *mut netif_tx_request)).offset = 0;
+            (*(self.tx.get(i as usize) as *mut netif_tx_request)).size = data.len() as u16;
+            (*(self.tx.get(i as usize) as *mut netif_tx_request)).flags = 0;
+            (*(self.tx.get(i as usize) as *mut netif_tx_request)).id = id as u16;
+        }
+
+        log::trace!("tx request {:?}", unsafe {
+            *(self.tx.get(i as usize) as *mut netif_tx_request)
+        });
 
         self.tx.req_prod_pvt = i + 1;
 
-        // wmb();
         fence(Ordering::SeqCst);
 
-        // RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&dev->tx, notify);
         self.tx.push_requests();
 
-        // if(notify) notify_remote_via_evtchn(dev->evtchn);
         self.notify();
 
         self.process_transmissions();
@@ -499,25 +446,10 @@ impl Device {
                     break;
                 }
 
-                //         txrsp = RING_GET_RESPONSE(&dev->tx, cons);
-                //     if (txrsp->status == NETIF_RSP_NULL)
-                //         continue;
-
-                //     if (txrsp->status == NETIF_RSP_ERROR)
-                //         printk("packet error\n");
-
-                //     id  = txrsp->id;
-                //     BUG_ON(id >= NET_TX_RING_SIZE);
-                //     buf = &dev->tx_buffers[id];
-                //     gnttab_end_access(buf->gref);
-                //     buf->gref=GRANT_INVALID_REF;
-
-                // add_id_to_freelist(id,dev->tx_freelist);
-                // up(&dev->tx_sem);
-
                 let txrsp = unsafe { (*self.tx.get(cons as usize)).rsp };
 
                 if txrsp.status == NETIF_RSP_NULL as i16 {
+                    log::trace!("rsp null");
                     continue;
                 }
 
@@ -587,8 +519,7 @@ impl<'a> phy::Device<'a> for Device {
     type TxToken = PhyTxToken<'a>;
 
     fn receive(&'a mut self) -> Option<(Self::RxToken, Self::TxToken)> {
-        None
-        // Some((PhyRxToken(&mut self.rx), PhyTxToken(&mut self.tx)))
+        self.rx().map(move |d| (PhyRxToken(d), PhyTxToken(self)))
     }
 
     fn transmit(&'a mut self) -> Option<Self::TxToken> {
@@ -612,7 +543,7 @@ impl phy::RxToken for PhyRxToken {
         F: FnOnce(&mut [u8]) -> smoltcp::Result<R>,
     {
         let result = f(&mut self.0);
-        log::trace!("rx: {:?}", self.0);
+        log::trace!("rx token: {:?}", self.0);
         result
     }
 }
@@ -620,16 +551,14 @@ impl phy::RxToken for PhyRxToken {
 pub struct PhyTxToken<'a>(&'a mut Device);
 
 impl<'a> phy::TxToken for PhyTxToken<'a> {
-    fn consume<R, F>(self, _timestamp: Instant, _len: usize, f: F) -> smoltcp::Result<R>
+    fn consume<R, F>(self, _timestamp: Instant, len: usize, f: F) -> smoltcp::Result<R>
     where
         F: FnOnce(&mut [u8]) -> smoltcp::Result<R>,
     {
-        let mut buf = alloc::vec![0; 1536];
+        let mut buf = alloc::vec![0; len];
         let result = f(&mut buf);
-        log::trace!("tx: {:?}", buf);
-
         self.0.tx(&buf);
-
+        log::trace!("tx token: {:?}", buf);
         result
     }
 }
