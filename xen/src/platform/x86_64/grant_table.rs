@@ -4,16 +4,18 @@ use {
     crate::{
         grant_table::{operations::setup_table, Error},
         memory::{
-            hypervisor_mmu_update, page_table, MachineAddress, MachineFrameNumber, PageEntry,
-            PageFrameNumber, VirtualAddress,
+            get_max_machine_frame_number, hypervisor_mmu_update, page_table::new_frame,
+            MachineFrameNumber, PageEntry, PageFrameNumber, PhysicalAddress, VirtualAddress,
         },
-        platform::consts::{L1_MASK, L1_PROT, PAGE_PRESENT, PAGE_PSE, PAGE_SHIFT, PAGE_SIZE},
+        platform::consts::{L1_PAGETABLE_ENTRIES, L1_PROT, PAGE_PRESENT, PAGE_SHIFT, PAGE_SIZE},
         DOMID_SELF, START_INFO,
     },
     alloc::alloc::{alloc, Layout},
-    core::convert::{TryFrom, TryInto},
-    xen_sys::{grant_entry_t, mmu_update_t, MMU_NORMAL_PT_UPDATE},
+    core::mem::size_of,
+    xen_sys::{grant_entry_t, mmu_update_t, __HYPERVISOR_VIRT_START},
 };
+
+const PAGE_LAYOUT: Layout = unsafe { Layout::from_size_align_unchecked(PAGE_SIZE, PAGE_SIZE) };
 
 /// Initialize grant table
 pub fn init<const NUM_GRANT_FRAMES: usize>() -> Result<*mut grant_entry_t, Error> {
@@ -21,107 +23,151 @@ pub fn init<const NUM_GRANT_FRAMES: usize>() -> Result<*mut grant_entry_t, Error
 
     setup_table(DOMID_SELF, &mut frames)?;
 
-    let va = unsafe {
-        alloc(
-            Layout::from_size_align(PAGE_SIZE * NUM_GRANT_FRAMES, PAGE_SIZE)
-                .expect("Failed to construct Layout"),
+    log::trace!("setup table {:p}", frames.as_ptr());
+
+    let mfn = get_max_machine_frame_number().0;
+    let grant_table = mfn << PAGE_SHIFT;
+
+    log::trace!(
+        "grant_table: {:#x} {:#x}",
+        grant_table,
+        grant_table + NUM_GRANT_FRAMES * PAGE_SIZE
+    );
+
+    unsafe {
+        build(
+            (*START_INFO).pt_base as *mut _,
+            VirtualAddress(grant_table).into(),
+            VirtualAddress(grant_table + NUM_GRANT_FRAMES * PAGE_SIZE).into(),
+            &frames,
         )
     };
 
-    let mut mmu_updates = [mmu_update_t { ptr: 0, val: 0 }; NUM_GRANT_FRAMES];
-
-    let mut pgt: *mut PageEntry = core::ptr::null_mut();
-
-    mmu_updates
-        .iter_mut()
-        .enumerate()
-        .for_each(|(i, mmu_update)| {
-            let va = VirtualAddress(unsafe {
-                va.offset(
-                    (i * PAGE_SIZE)
-                        .try_into()
-                        .expect("Failed to convert usize to isize"),
-                )
-            } as usize);
-
-            if pgt.is_null() || (va.0 & L1_MASK) == 0 {
-                pgt = unsafe { need_pgt(va) };
-            }
-
-            mmu_update.ptr = u64::try_from(MachineAddress::from(VirtualAddress(0)).0)
-                .expect("Failed to convert usize to u64")
-                | u64::try_from(MMU_NORMAL_PT_UPDATE).expect("Failed to convert u32 to u64");
-
-            mmu_update.val = ((frames[i]) << PAGE_SHIFT)
-                | u64::try_from(L1_PROT).expect("Failed to convert usize to u64");
-        });
-
-    hypervisor_mmu_update(&mmu_updates)?;
-
-    Ok(va.cast())
+    Ok(grant_table as *mut _)
 }
 
-/// Returns a valid PageEntry for a given virtual address
-///
-/// Allocates pagetable page if PageEntry does not exist
-unsafe fn need_pgt(va: VirtualAddress) -> *mut PageEntry {
-    let pt_base = (*START_INFO).pt_base as *mut PageEntry;
+unsafe fn build(
+    pt_base: *mut PageEntry,
+    start_pfn: PageFrameNumber,
+    max_pfn: PageFrameNumber,
+    frames: &[u64],
+) {
+    let mut pfn_counter = 0;
 
-    let mut pt_mfn = MachineFrameNumber::from(VirtualAddress(pt_base as usize));
-    let mut table = pt_base;
-    let mut pt_pfn: PageFrameNumber;
-    let mut offset: isize;
+    let mut mmu_updates = [mmu_update_t { ptr: 0, val: 0 }; L1_PAGETABLE_ENTRIES + 1];
+    let mut mmu_updates_index = 0;
 
-    offset = va.l4_table_offset();
-    let page = table.offset(offset);
-    if (*page).0 & PAGE_PRESENT == 0 {
-        let virt = VirtualAddress(alloc(
-            Layout::from_size_align(PAGE_SIZE, PAGE_SIZE).expect("Failed to construct Layout"),
-        ) as usize);
-
-        pt_pfn = PageFrameNumber::from(virt);
-
-        page_table::new_frame(pt_base, pt_pfn, pt_mfn, offset, 3);
-    }
-    assert!((*page).0 & PAGE_PRESENT != 0);
-    pt_mfn = MachineFrameNumber::from(*page);
-    table = VirtualAddress::from(pt_mfn).0 as *mut PageEntry;
-
-    offset = va.l3_table_offset();
-    let page = table.offset(offset);
-    if (*page).0 & PAGE_PRESENT == 0 {
-        let virt = VirtualAddress(alloc(
-            Layout::from_size_align(PAGE_SIZE, PAGE_SIZE).expect("Failed to construct Layout"),
-        ) as usize);
-
-        pt_pfn = PageFrameNumber::from(virt);
-
-        page_table::new_frame(pt_base, pt_pfn, pt_mfn, offset, 2);
-    }
-    assert!((*page).0 & PAGE_PRESENT != 0);
-    pt_mfn = MachineFrameNumber::from(*page);
-    table = VirtualAddress::from(pt_mfn).0 as *mut PageEntry;
-
-    offset = va.l2_table_offset();
-    let page = table.offset(offset);
-    if (*page).0 & PAGE_PRESENT == 0 {
-        let virt = VirtualAddress(alloc(
-            Layout::from_size_align(PAGE_SIZE, PAGE_SIZE).expect("Failed to construct Layout"),
-        ) as usize);
-
-        pt_pfn = PageFrameNumber::from(virt);
-
-        page_table::new_frame(pt_base, pt_pfn, pt_mfn, offset, 1);
-    }
-    assert!((*page).0 & PAGE_PRESENT != 0);
-
-    if (*page).0 & PAGE_PSE != 0 {
-        return page;
+    if max_pfn >= PageFrameNumber::from(VirtualAddress(__HYPERVISOR_VIRT_START as usize)) {
+        panic!("Maximum page frame number overlaps with Xen virtual space");
     }
 
-    pt_mfn = MachineFrameNumber::from(*page);
-    table = VirtualAddress::from(pt_mfn).0 as *mut PageEntry;
+    let start_address = VirtualAddress::from(start_pfn);
+    let end_address = VirtualAddress::from(max_pfn);
 
-    offset = va.l1_table_offset();
-    table.offset(offset)
+    log::debug!(
+        "Mapping memory range {:#x} - {:#x}",
+        start_address.0,
+        end_address.0
+    );
+
+    for address in (start_address.0..end_address.0)
+        .step_by(PAGE_SIZE)
+        .map(|a| VirtualAddress(a))
+    {
+        log::trace!("starting loop");
+        // lookup L3 page entry
+        let l3_page = {
+            let l4_table = pt_base;
+            let pt_mfn =
+                MachineFrameNumber::from(VirtualAddress(pt_base as *const PageEntry as usize));
+            let offset = address.l4_table_offset();
+            let page = l4_table.offset(offset);
+
+            // if not present, map new L3 page table frame
+            if (*page).0 & PAGE_PRESENT == 0 {
+                let npf_pfn = MachineFrameNumber::from(VirtualAddress(alloc(PAGE_LAYOUT) as usize));
+                log::trace!("npf_pfn3: {}", npf_pfn.0);
+                new_frame(pt_base, npf_pfn.into(), pt_mfn, offset, 3);
+            }
+
+            *page
+        };
+
+        // lookup L2 page entry
+        let l2_page = {
+            let pt_mfn = MachineFrameNumber::from(l3_page);
+            let l3_table = VirtualAddress::from(PhysicalAddress(
+                PageFrameNumber::from(pt_mfn).0 << PAGE_SHIFT,
+            ))
+            .0 as *mut PageEntry;
+            let offset = address.l3_table_offset();
+            let page = l3_table.offset(offset);
+
+            // if not present, map new L2 page table frame
+            if (*page).0 & PAGE_PRESENT == 0 {
+                let npf_pfn = MachineFrameNumber::from(VirtualAddress(alloc(PAGE_LAYOUT) as usize));
+                log::trace!("npf_pfn2: {}", npf_pfn.0);
+                new_frame(pt_base, npf_pfn.into(), pt_mfn, offset, 2);
+            }
+
+            *page
+        };
+
+        // lookup L1 page entry
+        let l1_page = {
+            let pt_mfn = MachineFrameNumber::from(l2_page);
+            let l2_table = VirtualAddress::from(PhysicalAddress(
+                PageFrameNumber::from(pt_mfn).0 << PAGE_SHIFT,
+            ))
+            .0 as *mut PageEntry;
+            let offset = address.l2_table_offset();
+
+            let page = l2_table.offset(offset);
+
+            // if not present, map new L1 page table frame
+            if (*page).0 & PAGE_PRESENT == 0 {
+                let npf_pfn = MachineFrameNumber::from(VirtualAddress(alloc(PAGE_LAYOUT) as usize));
+                log::trace!("npf_pfn1: {}", npf_pfn.0);
+                new_frame(pt_base, npf_pfn.into(), pt_mfn, offset, 1);
+            }
+
+            *page
+        };
+
+        // lookup page, adding to current batch of mmu_updates if not present
+        {
+            let mfn_to_map = frames[(pfn_counter)];
+            pfn_counter += 1;
+
+            let pt_mfn = MachineFrameNumber::from(l1_page);
+            let l1_table = VirtualAddress::from(PhysicalAddress(
+                PageFrameNumber::from(pt_mfn).0 << PAGE_SHIFT,
+            ))
+            .0 as *mut PageEntry;
+            let offset = address.l1_table_offset();
+
+            if ((*l1_table.offset(offset)).0 & PAGE_PRESENT) == 0 {
+                mmu_updates[mmu_updates_index].ptr =
+                    ((pt_mfn.0 << PAGE_SHIFT) + size_of::<PageEntry>() * offset as usize) as u64;
+                mmu_updates[mmu_updates_index].val =
+                    ((mfn_to_map as usize) << PAGE_SHIFT | L1_PROT) as u64;
+                mmu_updates_index += 1;
+            }
+        }
+
+        // if number of mmu_updates is equal to the number of L1 page table entries
+        if mmu_updates_index == L1_PAGETABLE_ENTRIES
+        // OR we have reached the maximum page frame number
+            || address.0 + PAGE_SIZE == end_address.0
+        // issue MMU update hypercall
+        {
+            log::trace!("issuing update");
+            hypervisor_mmu_update(&mmu_updates[..mmu_updates_index])
+                .expect("PTE could not be updated");
+
+            mmu_updates_index = 0;
+        }
+
+        log::trace!("ending loop");
+    }
 }

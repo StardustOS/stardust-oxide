@@ -22,6 +22,7 @@ pub mod memory;
 pub mod platform;
 pub mod scheduler;
 pub mod sections;
+pub mod time;
 pub mod trap;
 pub mod xenbus;
 pub mod xenstore;
@@ -35,9 +36,11 @@ pub static mut xen_features: [u8; XENFEAT_NR_SUBMAPS as usize * 32] =
     [0; XENFEAT_NR_SUBMAPS as usize * 32];
 
 /// Xen static startup information
+#[no_mangle]
 pub static mut START_INFO: *mut start_info = core::ptr::null_mut();
 
 /// Xen dynamic global state information
+#[no_mangle]
 pub static mut SHARED_INFO: *mut shared_info = core::ptr::null_mut();
 
 /// Map shared info page, initialise start and shared info pointers

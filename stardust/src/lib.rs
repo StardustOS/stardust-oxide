@@ -1,30 +1,31 @@
 //! Stardust Oxide
 
 #![no_std]
-#![feature(alloc_error_handler)]
 #![deny(missing_docs)]
-#![deny(warnings)]
+#![feature(alloc_error_handler)]
+#![feature(core_intrinsics)]
 
 extern crate alloc;
 
 use {
-    core::{slice, str, time::Duration},
+    core::{slice, str},
     executor::Executor,
-    log::{debug, error, info},
+    log::{debug, error},
     xen::{
         console::Writer,
-        grant_table, init_info, println,
+        events, grant_table, init_info, println,
         scheduler::{schedule_operation, Command, ShutdownReason},
         sections::{edata, end, erodata, etext, text_start},
+        time,
         xen_sys::start_info_t,
-        xenbus::{self, MessageKind},
-        xenstore, Delay,
+        xenbus, xenstore,
     },
 };
 
 mod executor;
 mod logger;
 mod mm;
+mod net;
 mod trap;
 
 #[cfg(feature = "test")]
@@ -51,6 +52,8 @@ pub fn launch(start_info: *mut start_info_t) {
     print_start_info(start_info);
 
     trap::init();
+    events::init();
+    time::init();
     mm::init(start_info);
     grant_table::init();
     xenstore::init();
@@ -60,25 +63,13 @@ pub fn launch(start_info: *mut start_info_t) {
     test::tests();
 
     let mut executor = Executor::new();
-    // executor.spawn(xenbus::task());
-    executor.spawn(example_task());
+    //executor.spawn(xenbus::task());
+    executor.spawn(net::server());
     executor.run();
 
     // if run() terminates then all tasks have completed, exit cleanly
     Writer::flush();
     schedule_operation(Command::Shutdown(ShutdownReason::Poweroff));
-}
-
-// prints every 5 seconds
-async fn example_task() {
-    loop {
-        info!("hello from example task!");
-        Delay::new(Duration::new(1, 0)).await;
-        debug!(
-            "{:?}",
-            xenbus::request(MessageKind::Control, &[b"print\0", b"hello world!", b"\0"]).await
-        );
-    }
 }
 
 fn print_start_info(start_info: &start_info_t) {

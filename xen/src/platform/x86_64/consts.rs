@@ -85,3 +85,9 @@ pub const PT_PROT: [usize; 4] = [L1_PROT, L2_PROT, L3_PROT, L4_PROT];
 
 /// Maximum amount of memory available on x86_64
 pub const MAX_MEM_SIZE: usize = 512 << 30;
+
+/// Address of virtual demand mapped area
+pub const VIRT_DEMAND_AREA: usize = 0x0000100000000000;
+
+/// Number of demand map pages
+pub const DEMAND_MAP_PAGES: usize = 0x8000000;
