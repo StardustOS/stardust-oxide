@@ -13,7 +13,7 @@
 * [x] XenStore interface
 * [x] XenBus interface
 * [x] Simple async executor
-* [ ] Network driver using [smoltcp](https://github.com/smoltcp-rs/smoltcp/tree/774b375cb04e694199e27c7b9e36628436a4fac3) for TCP/IP stack
+* [x] Network driver using [smoltcp](https://github.com/smoltcp-rs/smoltcp/tree/774b375cb04e694199e27c7b9e36628436a4fac3) for TCP/IP stack
 
 <img width="592" alt="Screenshot 2022-03-09 at 12 15 38" src="https://user-images.githubusercontent.com/8290136/157440273-81c14e0a-d9a4-4462-98c8-8df1a21048e3.png">
 
