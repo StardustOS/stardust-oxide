@@ -6,7 +6,7 @@ edition = "2018"
 [dependencies]
 xen = { path = "../xen" }
 buddy_system_allocator = "0.8.0"
-log = { version = "0.4.14", features = ["release_max_level_debug"] }
+log = { version = "0.4.16", features = ["release_max_level_debug"] }
 smoltcp = { version = "0.8.0", default-features = false, features = ["proto-ipv4", "proto-ipv6", "proto-igmp", "medium-ethernet", "socket-tcp",  "alloc", "log"] }
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 memoffset = "0.6.5"
