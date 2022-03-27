@@ -2,8 +2,8 @@
 
 use {
     alloc::{collections::BTreeMap, vec, vec::Vec},
-    core::fmt::Write,
-    log::debug,
+    core::{fmt::Write, str},
+    log::{info, warn},
     phy::Device,
     smoltcp::{
         iface::{InterfaceBuilder, NeighborCache, Routes},
@@ -43,13 +43,13 @@ pub async fn server() {
 
     let tcp_handle = iface.add_socket(socket);
 
-    debug!("starting TCP server");
+    info!("starting TCP server");
 
     loop {
         match iface.poll(Instant::from_micros((get_system_time() >> 10) as i64)) {
             Ok(_) => {}
             Err(e) => {
-                debug!("poll error: {}", e);
+                warn!("poll error: {}", e);
             }
         }
 
@@ -58,10 +58,21 @@ pub async fn server() {
             socket.listen(80).unwrap();
         }
 
-        if socket.can_send() {
-            debug!("tcp:80 send greeting");
-            writeln!(socket, "hello").unwrap();
-            debug!("tcp:80 close");
+        if socket.can_recv() {
+            let mut recv_buf = vec![0; 2048];
+            let len = socket.recv_slice(&mut recv_buf).unwrap();
+
+            info!("tcp:80 received: {:?}", unsafe {
+                str::from_utf8_unchecked(&recv_buf[..len])
+            });
+
+            writeln!(socket, "SERVER:\t hello! you sent {:?}", unsafe {
+                str::from_utf8_unchecked(&recv_buf[..len])
+            })
+            .unwrap();
+            writeln!(socket, "SERVER:\t goodbye 👋").unwrap();
+
+            info!("tcp:80 close");
             socket.close();
         }
     }
