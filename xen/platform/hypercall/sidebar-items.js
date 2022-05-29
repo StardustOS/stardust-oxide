@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["hypercall0","Makes hypercall with 0 arguments"],["hypercall1","Makes hypercall with 1 argument"],["hypercall2","Makes hypercall with 2 arguments"],["hypercall3","Makes hypercall with 3 arguments"],["hypercall4","Makes hypercall with 4 arguments"],["hypercall5","Makes hypercall with 5 arguments"]]});

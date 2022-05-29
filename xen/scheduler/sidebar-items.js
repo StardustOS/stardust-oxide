@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Command","Scheduling command"],["ShutdownReason","Reasons for `Command::Shutdown`"]],"fn":[["schedule_operation",""]]});

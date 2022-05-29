@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["launch","Launches the kernel with the supplied reference to the start_info structure."]]});

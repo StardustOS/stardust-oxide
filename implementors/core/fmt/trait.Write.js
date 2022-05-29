@@ -1,0 +1,4 @@
+(function() {var implementors = {};
+implementors["smoltcp"] = [{"text":"impl&lt;'a&gt; Write for <a class=\"struct\" href=\"smoltcp/socket/struct.TcpSocket.html\" title=\"struct smoltcp::socket::TcpSocket\">TcpSocket</a>&lt;'a&gt;","synthetic":false,"types":["smoltcp::socket::tcp::TcpSocket"]}];
+implementors["xen"] = [{"text":"impl&lt;'a&gt; Write for <a class=\"struct\" href=\"xen/console/struct.Writer.html\" title=\"struct xen::console::Writer\">Writer</a>&lt;'a&gt;","synthetic":false,"types":["xen::console::Writer"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

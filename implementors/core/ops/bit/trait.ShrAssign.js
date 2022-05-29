@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["smoltcp"] = [{"text":"impl ShrAssign&lt;u32&gt; for <a class=\"struct\" href=\"smoltcp/time/struct.Duration.html\" title=\"struct smoltcp::time::Duration\">Duration</a>","synthetic":false,"types":["smoltcp::time::Duration"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

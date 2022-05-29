@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["set_trap_table","Registers a trap handler table"]],"struct":[["TrapInfo","Information for trap handler"]]});

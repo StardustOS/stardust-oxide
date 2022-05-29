@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["domain_id","Read the current domain’s ID"],["init","Initialize XenStore"],["ls","List contents of directory"],["read","Read a key’s value from the XenStore"],["write","Write a key-value pair to the XenStore"]]});

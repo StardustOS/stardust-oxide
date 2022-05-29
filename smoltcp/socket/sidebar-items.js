@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Socket","A network socket."],["TcpState","The state of a TCP socket, according to RFC 793."]],"struct":[["TcpSocket","A Transmission Control Protocol socket."]],"trait":[["AnySocket","A conversion trait for network sockets."]],"type":[["TcpSocketBuffer","A TCP socket ring buffer."]]});

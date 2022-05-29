@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["block","Block for the supplied number of nanoseconds"],["get_system_time","Gets the current system time represented as the number of nanoseconds since 1970-01-01 00:00:00 UTC"],["init","Initialise time"]]});

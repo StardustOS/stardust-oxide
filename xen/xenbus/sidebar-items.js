@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["MessageKind","XenBus message type"],["State","State of XenBus connection"]],"fn":[["init","Initialize XenStore"],["request","Associates a value with a path"]],"struct":[["MessageHeader","XenBus message header"]]});
